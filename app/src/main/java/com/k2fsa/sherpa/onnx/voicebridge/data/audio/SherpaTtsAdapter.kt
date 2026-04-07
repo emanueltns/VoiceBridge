@@ -7,7 +7,9 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
-import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.voicebridge.domain.service.TextToSpeechService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,17 +34,20 @@ class SherpaTtsAdapter @Inject constructor(
         val modelDir = "kokoro-en-v0_19"
         val dataDir = assetCopier.copyDataDir("$modelDir/espeak-ng-data")
 
-        val config = getOfflineTtsConfig(
-            modelDir = modelDir,
-            modelName = "model.onnx",
-            acousticModelName = "",
-            vocoder = "",
-            voices = "voices.bin",
-            lexicon = "",
-            dataDir = "$dataDir/$modelDir/espeak-ng-data",
-            dictDir = "",
-            ruleFsts = "",
-            ruleFars = "",
+        val config = OfflineTtsConfig(
+            model = OfflineTtsModelConfig(
+                kokoro = OfflineTtsKokoroModelConfig(
+                    model = "$modelDir/model.onnx",
+                    voices = "$modelDir/voices.bin",
+                    tokens = "$modelDir/tokens.txt",
+                    dataDir = "$dataDir/$modelDir/espeak-ng-data",
+                ),
+                numThreads = 4,
+                debug = false,
+                provider = "cpu",
+            ),
+            maxNumSentences = 4,   // Process 4 sentences at once — fewer pauses
+            silenceScale = 0.05f,  // Minimal inter-sentence silence
         )
 
         tts = OfflineTts(assetManager = assetManager, config = config)
@@ -55,11 +60,14 @@ class SherpaTtsAdapter @Inject constructor(
 
         shouldStop = false
         _isSpeaking.value = true
-        track.play()
+
+        if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+            track.play()
+        }
 
         t.generateWithConfigAndCallback(
             text = text,
-            config = GenerationConfig(sid = 0, speed = 1.0f),
+            config = GenerationConfig(sid = 0, speed = 1.05f),
             callback = { samples ->
                 if (!shouldStop) {
                     track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
@@ -71,7 +79,7 @@ class SherpaTtsAdapter @Inject constructor(
         )
 
         // Brief pause for audio to finish draining
-        Thread.sleep(200)
+        Thread.sleep(150)
         _isSpeaking.value = false
     }
 

@@ -16,9 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -104,7 +104,6 @@ fun ConversationScreen(
                     if (state.isRunning) {
                         viewModel.handleIntent(ConversationIntent.Stop)
                     } else {
-                        // Request permissions first, then start
                         val permissions = buildList {
                             add(Manifest.permission.RECORD_AUDIO)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -117,12 +116,17 @@ fun ConversationScreen(
                 containerColor = if (state.isRunning) {
                     MaterialTheme.colorScheme.error
                 } else {
-                    MaterialTheme.colorScheme.primary
+                    MaterialTheme.colorScheme.primaryContainer
                 },
             ) {
                 Icon(
-                    imageVector = if (state.isRunning) Icons.Default.MicOff else Icons.Default.Mic,
-                    contentDescription = if (state.isRunning) "Stop" else "Start",
+                    imageVector = if (state.isRunning) Icons.Default.CallEnd else Icons.Default.Call,
+                    contentDescription = if (state.isRunning) "End call" else "Start call",
+                    tint = if (state.isRunning) {
+                        MaterialTheme.colorScheme.onError
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    },
                 )
             }
         },
@@ -176,12 +180,12 @@ private fun getStatusText(pipeline: PipelineState, connection: ConnectionState):
         return connection.message
     }
     return when (pipeline) {
-        PipelineState.IDLE -> "Tap the mic to start"
+        PipelineState.IDLE -> "Tap the phone to start"
         PipelineState.INITIALIZING -> "Loading models..."
         PipelineState.LISTENING -> "Listening..."
-        PipelineState.TRANSCRIBING -> "Transcribing..."
-        PipelineState.SENDING -> "Thinking..."
-        PipelineState.SPEAKING -> "Speaking..."
-        PipelineState.ENTERTAINING -> "Did you know..."
+        PipelineState.TRANSCRIBING -> "Got it, processing..."
+        PipelineState.SENDING -> "Asking Claude..."
+        PipelineState.SPEAKING -> "Claude is speaking..."
+        PipelineState.ENTERTAINING -> "Fun fact while we wait..."
     }
 }
