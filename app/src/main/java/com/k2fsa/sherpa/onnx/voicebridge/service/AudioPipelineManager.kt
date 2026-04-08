@@ -44,8 +44,12 @@ class AudioPipelineManager @Inject constructor(
     private val _currentConversationId = MutableStateFlow<String?>(null)
     val currentConversationId: StateFlow<String?> = _currentConversationId.asStateFlow()
 
-    // Expose partial results so UI can show real-time transcription
     val partialResult: StateFlow<String> get() = asr.partialResult
+
+    private val _audioAmplitude = MutableStateFlow(0f)
+    val audioAmplitude: StateFlow<Float> = _audioAmplitude.asStateFlow()
+
+    private var smoothedAmplitude = 0f
 
     private var pipelineJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -122,8 +126,14 @@ class AudioPipelineManager @Inject constructor(
 
             val samples = FloatArray(ret) { buffer[it] / 32768.0f }
 
+            // Compute audio amplitude (RMS) with exponential smoothing
+            var sumSquares = 0f
+            for (s in samples) sumSquares += s * s
+            val rms = kotlin.math.sqrt(sumSquares / samples.size)
+            smoothedAmplitude = smoothedAmplitude * 0.7f + rms * 0.3f
+            _audioAmplitude.value = (smoothedAmplitude * 8f).coerceIn(0f, 1f)
+
             try {
-                // Feed audio to streaming ASR — it decodes incrementally
                 asr.feedAudio(samples)
             } catch (e: Exception) {
                 Log.e(TAG, "ASR feed error: ${e.message}")

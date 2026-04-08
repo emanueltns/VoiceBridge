@@ -5,7 +5,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.os.Build
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -60,6 +59,7 @@ class ConversationViewModel @Inject constructor(
         when (intent) {
             is ConversationIntent.Start -> startConversation()
             is ConversationIntent.Stop -> stopConversation()
+            is ConversationIntent.NewConversation -> newConversation()
             is ConversationIntent.DismissError -> _state.update { it.copy(error = null) }
             is ConversationIntent.OpenHistory -> { /* handled by navigation */ }
             is ConversationIntent.OpenSettings -> { /* handled by navigation */ }
@@ -81,20 +81,21 @@ class ConversationViewModel @Inject constructor(
                     conversationRepository.getConversation(it)
                 } ?: conversationRepository.createConversation()
 
-                // Start foreground service
                 val serviceIntent = Intent(application, VoiceBridgeForegroundService::class.java).apply {
                     action = ServiceCommand.ACTION_START
                     putExtra("conversation_id", conversation.id)
                 }
                 ContextCompat.startForegroundService(application, serviceIntent)
 
-                // Bind to the service to observe state
                 bindToService()
-
-                // Observe messages for this conversation
                 observeMessages(conversation.id)
 
-                _state.update { it.copy(isRunning = true) }
+                _state.update {
+                    it.copy(
+                        isRunning = true,
+                        callStartTimeMs = System.currentTimeMillis(),
+                    )
+                }
             } catch (e: Exception) {
                 _state.update { it.copy(error = "Failed to start: ${e.message}") }
             }
@@ -106,7 +107,31 @@ class ConversationViewModel @Inject constructor(
             action = ServiceCommand.ACTION_STOP
         }
         application.startService(serviceIntent)
-        _state.update { it.copy(isRunning = false, pipelineState = PipelineState.IDLE) }
+        _state.update {
+            it.copy(
+                isRunning = false,
+                pipelineState = PipelineState.IDLE,
+                callStartTimeMs = null,
+                audioAmplitude = 0f,
+                partialTranscript = "",
+            )
+        }
+    }
+
+    private fun newConversation() {
+        viewModelScope.launch {
+            val conversation = conversationRepository.createConversation()
+            observeMessages(conversation.id)
+
+            // Restart service with new conversation
+            if (_state.value.isRunning) {
+                val serviceIntent = Intent(application, VoiceBridgeForegroundService::class.java).apply {
+                    action = ServiceCommand.ACTION_START
+                    putExtra("conversation_id", conversation.id)
+                }
+                ContextCompat.startForegroundService(application, serviceIntent)
+            }
+        }
     }
 
     private fun bindToService() {
@@ -133,6 +158,11 @@ class ConversationViewModel @Inject constructor(
         viewModelScope.launch {
             svc.partialResult.collect { partial ->
                 _state.update { it.copy(partialTranscript = partial) }
+            }
+        }
+        viewModelScope.launch {
+            svc.audioAmplitude.collect { amplitude ->
+                _state.update { it.copy(audioAmplitude = amplitude) }
             }
         }
     }

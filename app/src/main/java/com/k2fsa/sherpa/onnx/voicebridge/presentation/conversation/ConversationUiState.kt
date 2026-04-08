@@ -11,11 +11,14 @@ data class ConversationUiState(
     val isRunning: Boolean = false,
     val error: String? = null,
     val partialTranscript: String = "",
+    val audioAmplitude: Float = 0f,
+    val callStartTimeMs: Long? = null,
 )
 
 sealed class ConversationIntent {
     data object Start : ConversationIntent()
     data object Stop : ConversationIntent()
+    data object NewConversation : ConversationIntent()
     data object DismissError : ConversationIntent()
     data object OpenHistory : ConversationIntent()
     data object OpenSettings : ConversationIntent()

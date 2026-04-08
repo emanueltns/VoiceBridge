@@ -36,6 +36,9 @@ class VoiceBridgeForegroundService : Service() {
     val partialResult: StateFlow<String>
         get() = pipelineManager.partialResult
 
+    val audioAmplitude: StateFlow<Float>
+        get() = pipelineManager.audioAmplitude
+
     private var isInitialized = false
 
     inner class LocalBinder : Binder() {
