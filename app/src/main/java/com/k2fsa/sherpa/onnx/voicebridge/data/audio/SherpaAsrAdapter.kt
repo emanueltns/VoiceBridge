@@ -18,12 +18,6 @@ import javax.inject.Inject
 
 private const val TAG = "StreamingASR"
 
-private val HALLUCINATION_PATTERNS = listOf(
-    "thank you", "thanks for watching", "subscribe",
-    "like and subscribe", "please subscribe", "see you next time",
-    "bye bye", "goodbye", "the end",
-)
-
 class SherpaAsrAdapter @Inject constructor(
     private val assetManager: AssetManager,
 ) : SpeechRecognitionService {
@@ -36,7 +30,7 @@ class SherpaAsrAdapter @Inject constructor(
     override val partialResult: StateFlow<String> = _partialResult.asStateFlow()
 
     override fun initialize() {
-        val modelDir = "sherpa-onnx-streaming-zipformer-en"
+        val modelDir = "sherpa-onnx-nemotron-en"
         val config = OnlineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = sampleRate, featureDim = 80),
             modelConfig = OnlineModelConfig(
@@ -46,22 +40,25 @@ class SherpaAsrAdapter @Inject constructor(
                     joiner = "$modelDir/joiner.int8.onnx",
                 ),
                 tokens = "$modelDir/tokens.txt",
-                numThreads = 2,
+                numThreads = 4,
                 debug = false,
                 provider = "cpu",
-                modelType = "zipformer2",
             ),
             endpointConfig = EndpointConfig(
-                rule1 = EndpointRule(false, 1.8f, 0.0f),  // 1.8s silence = endpoint
-                rule2 = EndpointRule(true, 1.0f, 0.0f),   // 1.0s silence after speech
-                rule3 = EndpointRule(false, 0.0f, 30.0f),  // 30s max utterance
+                // Rule 1: long silence without any speech — reset
+                rule1 = EndpointRule(false, 2.5f, 0.0f),
+                // Rule 2: silence after speech — this is the main one
+                // 1.5s gives you time to pause and think mid-sentence
+                rule2 = EndpointRule(true, 1.5f, 0.0f),
+                // Rule 3: max utterance — 60s so you can speak long
+                rule3 = EndpointRule(false, 0.0f, 60.0f),
             ),
             enableEndpoint = true,
             decodingMethod = "greedy_search",
         )
         recognizer = OnlineRecognizer(assetManager = assetManager, config = config)
         stream = recognizer!!.createStream()
-        Log.i(TAG, "Streaming ASR initialized (Zipformer)")
+        Log.i(TAG, "Streaming ASR initialized (Nemotron 0.6B)")
     }
 
     override fun feedAudio(samples: FloatArray) {
@@ -73,7 +70,6 @@ class SherpaAsrAdapter @Inject constructor(
             rec.decode(s)
         }
 
-        // Update partial result
         val result = rec.getResult(s)
         if (result.text.isNotBlank()) {
             _partialResult.value = result.text.trim()
@@ -93,17 +89,10 @@ class SherpaAsrAdapter @Inject constructor(
         val result = rec.getResult(s)
         val text = result.text.trim()
 
-        // Reset stream for next utterance
         rec.reset(s)
         _partialResult.value = ""
 
-        // Filter hallucinations
-        val lower = text.lowercase()
-        if (lower.isEmpty()) return ""
-        if (HALLUCINATION_PATTERNS.any { lower == it || lower == "$it." }) {
-            Log.d(TAG, "Filtered hallucination: $text")
-            return ""
-        }
+        if (text.isEmpty()) return ""
 
         return text
     }
