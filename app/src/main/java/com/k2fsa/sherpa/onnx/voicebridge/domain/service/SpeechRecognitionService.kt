@@ -1,9 +1,13 @@
 package com.k2fsa.sherpa.onnx.voicebridge.domain.service
 
-import com.k2fsa.sherpa.onnx.voicebridge.domain.model.AudioSegment
+import kotlinx.coroutines.flow.StateFlow
 
 interface SpeechRecognitionService {
+    val partialResult: StateFlow<String>
     fun initialize()
-    fun transcribe(segment: AudioSegment): String
+    fun feedAudio(samples: FloatArray)
+    fun isEndpoint(): Boolean
+    fun getFinalResult(): String
+    fun reset()
     fun release()
 }

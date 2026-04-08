@@ -33,6 +33,9 @@ class VoiceBridgeForegroundService : Service() {
     val currentConversationId: StateFlow<String?>
         get() = pipelineManager.currentConversationId
 
+    val partialResult: StateFlow<String>
+        get() = pipelineManager.partialResult
+
     private var isInitialized = false
 
     inner class LocalBinder : Binder() {

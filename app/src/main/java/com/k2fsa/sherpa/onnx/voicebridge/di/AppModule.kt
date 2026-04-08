@@ -15,8 +15,6 @@ import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.SettingsRepository
 import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.VpsRepository
 import com.k2fsa.sherpa.onnx.voicebridge.domain.service.SpeechRecognitionService
 import com.k2fsa.sherpa.onnx.voicebridge.domain.service.TextToSpeechService
-import com.k2fsa.sherpa.onnx.voicebridge.domain.service.VoiceActivityDetector
-import com.k2fsa.sherpa.onnx.voicebridge.data.audio.SherpaVadAdapter
 import com.k2fsa.sherpa.onnx.voicebridge.data.audio.SherpaAsrAdapter
 import com.k2fsa.sherpa.onnx.voicebridge.data.audio.SherpaTtsAdapter
 import dagger.Binds
@@ -70,10 +68,6 @@ abstract class BindingsModule {
     @Binds
     @Singleton
     abstract fun bindVpsRepository(impl: VpsRepositoryImpl): VpsRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindVoiceActivityDetector(impl: SherpaVadAdapter): VoiceActivityDetector
 
     @Binds
     @Singleton

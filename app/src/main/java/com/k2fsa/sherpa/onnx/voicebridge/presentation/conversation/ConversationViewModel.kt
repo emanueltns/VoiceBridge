@@ -130,6 +130,11 @@ class ConversationViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            svc.partialResult.collect { partial ->
+                _state.update { it.copy(partialTranscript = partial) }
+            }
+        }
     }
 
     private fun observeMessages(conversationId: String) {

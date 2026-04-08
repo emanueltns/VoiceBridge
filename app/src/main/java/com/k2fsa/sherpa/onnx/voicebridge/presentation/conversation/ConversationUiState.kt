@@ -10,7 +10,7 @@ data class ConversationUiState(
     val messages: List<Message> = emptyList(),
     val isRunning: Boolean = false,
     val error: String? = null,
-    val entertainmentText: String? = null,
+    val partialTranscript: String = "",
 )
 
 sealed class ConversationIntent {

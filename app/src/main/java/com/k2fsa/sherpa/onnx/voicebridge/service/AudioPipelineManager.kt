@@ -4,14 +4,12 @@ import android.media.AudioManager
 import android.media.ToneGenerator
 import android.util.Log
 import com.k2fsa.sherpa.onnx.voicebridge.data.audio.AudioRecordManager
-import com.k2fsa.sherpa.onnx.voicebridge.domain.model.AudioSegment
 import com.k2fsa.sherpa.onnx.voicebridge.domain.model.MessageRole
 import com.k2fsa.sherpa.onnx.voicebridge.domain.model.PipelineState
 import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.ConversationRepository
 import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.VpsRepository
 import com.k2fsa.sherpa.onnx.voicebridge.domain.service.SpeechRecognitionService
 import com.k2fsa.sherpa.onnx.voicebridge.domain.service.TextToSpeechService
-import com.k2fsa.sherpa.onnx.voicebridge.domain.service.VoiceActivityDetector
 import com.k2fsa.sherpa.onnx.voicebridge.domain.usecase.GetIdleEntertainmentUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -20,7 +18,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,7 +31,6 @@ private const val TAG = "AudioPipeline"
 private const val ENTERTAINMENT_DELAY_MS = 3000L
 
 class AudioPipelineManager @Inject constructor(
-    private val vad: VoiceActivityDetector,
     private val asr: SpeechRecognitionService,
     private val tts: TextToSpeechService,
     private val audioRecordManager: AudioRecordManager,
@@ -48,19 +44,17 @@ class AudioPipelineManager @Inject constructor(
     private val _currentConversationId = MutableStateFlow<String?>(null)
     val currentConversationId: StateFlow<String?> = _currentConversationId.asStateFlow()
 
-    private var captureJob: Job? = null
-    private var processingJob: Job? = null
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Expose partial results so UI can show real-time transcription
+    val partialResult: StateFlow<String> get() = asr.partialResult
 
-    // Channel for passing speech segments from capture to processing
-    private val segmentChannel = Channel<AudioSegment>(Channel.BUFFERED)
+    private var pipelineJob: Job? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private var toneGenerator: ToneGenerator? = null
 
     fun initialize() {
         _pipelineState.value = PipelineState.INITIALIZING
         Log.i(TAG, "Initializing models...")
-        vad.initialize()
         asr.initialize()
         tts.initialize()
         toneGenerator = try {
@@ -77,32 +71,25 @@ class AudioPipelineManager @Inject constructor(
             return
         }
 
-        vad.reset()
+        asr.reset()
         _pipelineState.value = PipelineState.LISTENING
         playTone(ToneGenerator.TONE_PROP_BEEP)
 
-        // Capture runs independently — always reading from mic and feeding VAD
-        captureJob = scope.launch { captureLoop() }
-
-        // Processing picks up segments from the channel
-        processingJob = scope.launch { processingLoop() }
+        pipelineJob = scope.launch { streamingLoop() }
     }
 
     fun stop() {
-        captureJob?.cancel()
-        processingJob?.cancel()
-        captureJob = null
-        processingJob = null
+        pipelineJob?.cancel()
+        pipelineJob = null
         audioRecordManager.stop()
         tts.stop()
-        vad.reset()
+        asr.reset()
         _pipelineState.value = PipelineState.IDLE
         _currentConversationId.value = null
     }
 
     fun release() {
         stop()
-        vad.release()
         asr.release()
         tts.release()
         toneGenerator?.release()
@@ -110,11 +97,14 @@ class AudioPipelineManager @Inject constructor(
     }
 
     /**
-     * Capture loop: always reads audio from the mic and feeds VAD.
-     * When speech is detected, sends the segment to the processing channel.
-     * This loop NEVER blocks on transcription/network/TTS.
+     * Main streaming loop:
+     * 1. Continuously reads audio and feeds it to the streaming ASR
+     * 2. ASR processes in real-time, partial results update live
+     * 3. When ASR detects an endpoint (natural pause), grab final text
+     * 4. Send to VPS, entertain while waiting, speak response
+     * 5. Resume listening immediately
      */
-    private suspend fun captureLoop() {
+    private suspend fun streamingLoop() {
         val buffer = ShortArray(audioRecordManager.bufferSize)
 
         while (scope.isActive) {
@@ -125,8 +115,6 @@ class AudioPipelineManager @Inject constructor(
                     delay(500)
                     if (!audioRecordManager.start()) {
                         delay(2000)
-                    } else {
-                        vad.reset()
                     }
                 }
                 continue
@@ -135,71 +123,55 @@ class AudioPipelineManager @Inject constructor(
             val samples = FloatArray(ret) { buffer[it] / 32768.0f }
 
             try {
-                vad.feedAudio(samples)
+                // Feed audio to streaming ASR — it decodes incrementally
+                asr.feedAudio(samples)
             } catch (e: Exception) {
-                Log.e(TAG, "VAD error: ${e.message}, resetting")
-                vad.reset()
+                Log.e(TAG, "ASR feed error: ${e.message}")
+                asr.reset()
                 continue
             }
 
-            while (vad.hasSpeechSegment()) {
-                val segment = vad.getSpeechSegment()
-                segmentChannel.trySend(segment)
-            }
-        }
-    }
+            // Check if ASR detected an endpoint (user stopped speaking)
+            if (asr.isEndpoint()) {
+                val text = asr.getFinalResult()
 
-    /**
-     * Processing loop: picks up speech segments and runs the full pipeline.
-     * While this is busy (transcribing/sending/speaking), the capture loop
-     * keeps running and buffering new segments.
-     */
-    private suspend fun processingLoop() {
-        for (segment in segmentChannel) {
-            if (!scope.isActive) break
+                if (text.isBlank()) {
+                    _pipelineState.value = PipelineState.LISTENING
+                    continue
+                }
 
-            // Drain any extra segments that arrived while we were busy — use the latest one
-            var latestSegment = segment
-            while (true) {
-                val next = segmentChannel.tryReceive().getOrNull() ?: break
-                // Merge: concatenate samples for a more complete utterance
-                val merged = FloatArray(latestSegment.samples.size + next.samples.size)
-                latestSegment.samples.copyInto(merged)
-                next.samples.copyInto(merged, latestSegment.samples.size)
-                latestSegment = AudioSegment(merged)
-            }
+                Log.i(TAG, "Transcribed: $text")
+                val conversationId = _currentConversationId.value ?: continue
 
-            playTone(ToneGenerator.TONE_PROP_ACK)
-            _pipelineState.value = PipelineState.TRANSCRIBING
-            val text = asr.transcribe(latestSegment)
+                // Process the utterance
+                playTone(ToneGenerator.TONE_PROP_ACK)
+                conversationRepository.addMessage(conversationId, MessageRole.USER, text)
 
-            if (text.isBlank()) {
+                _pipelineState.value = PipelineState.SENDING
+                val response = sendWithEntertainment(text)
+
+                if (response != null) {
+                    conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, response)
+                    playTone(ToneGenerator.TONE_PROP_ACK)
+                    _pipelineState.value = PipelineState.SPEAKING
+                    tts.speak(response)
+                } else {
+                    conversationRepository.addMessage(
+                        conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
+                    )
+                    tts.speak("I couldn't reach the server. I'll keep trying.")
+                }
+
+                // Back to listening
                 _pipelineState.value = PipelineState.LISTENING
                 playTone(ToneGenerator.TONE_PROP_BEEP)
-                continue
+                asr.reset()
+            } else if (asr.partialResult.value.isNotBlank()) {
+                // We have partial text — show we're actively transcribing
+                if (_pipelineState.value == PipelineState.LISTENING) {
+                    _pipelineState.value = PipelineState.TRANSCRIBING
+                }
             }
-
-            val conversationId = _currentConversationId.value ?: continue
-
-            conversationRepository.addMessage(conversationId, MessageRole.USER, text)
-
-            _pipelineState.value = PipelineState.SENDING
-            val response = sendWithEntertainment(text)
-
-            if (response != null) {
-                conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, response)
-                playTone(ToneGenerator.TONE_PROP_ACK)
-                _pipelineState.value = PipelineState.SPEAKING
-                tts.speak(response)
-            } else {
-                conversationRepository.addMessage(
-                    conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
-                )
-                tts.speak("I couldn't reach the server. I'll keep trying.")
-            }
-
-            _pipelineState.value = PipelineState.LISTENING
-            playTone(ToneGenerator.TONE_PROP_BEEP)
         }
     }
 
@@ -219,7 +191,6 @@ class AudioPipelineManager @Inject constructor(
                 }
             }
 
-            // Continuous entertainment loop
             val entertainmentJob = launch {
                 delay(ENTERTAINMENT_DELAY_MS)
                 while (isActive && !responseHolder.isCompleted) {
@@ -235,7 +206,6 @@ class AudioPipelineManager @Inject constructor(
             val result = responseHolder.await()
             entertainmentJob.cancel()
 
-            // Let current TTS finish, then transition
             if (tts.isSpeaking.value) {
                 var waitCount = 0
                 while (tts.isSpeaking.value && waitCount < 100) {
