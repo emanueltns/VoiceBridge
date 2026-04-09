@@ -39,6 +39,17 @@ class VoiceBridgeForegroundService : Service() {
     val audioAmplitude: StateFlow<Float>
         get() = pipelineManager.audioAmplitude
 
+    val isMuted: StateFlow<Boolean>
+        get() = pipelineManager.isMuted
+
+    fun setMuted(muted: Boolean) {
+        pipelineManager.setMuted(muted)
+    }
+
+    fun setVoiceId(sid: Int) {
+        pipelineManager.setVoiceId(sid)
+    }
+
     private var isInitialized = false
 
     inner class LocalBinder : Binder() {

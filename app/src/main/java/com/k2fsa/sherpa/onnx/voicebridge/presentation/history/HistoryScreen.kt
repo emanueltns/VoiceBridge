@@ -1,7 +1,6 @@
 package com.k2fsa.sherpa.onnx.voicebridge.presentation.history
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,6 +49,7 @@ import java.util.Locale
 fun HistoryScreen(
     viewModel: HistoryViewModel,
     onNavigateBack: () -> Unit,
+    onConversationClick: (String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -97,6 +97,7 @@ fun HistoryScreen(
                 items(state.conversations, key = { it.id }) { conversation ->
                     ConversationCard(
                         conversation = conversation,
+                        onClick = { onConversationClick(conversation.id) },
                         onDelete = { viewModel.onDelete(conversation.id) },
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -109,12 +110,15 @@ fun HistoryScreen(
 @Composable
 private fun ConversationCard(
     conversation: Conversation,
+    onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = CallControlBg),
     ) {
         Row(

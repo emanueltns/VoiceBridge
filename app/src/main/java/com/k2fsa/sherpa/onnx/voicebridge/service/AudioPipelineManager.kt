@@ -56,15 +56,36 @@ class AudioPipelineManager @Inject constructor(
 
     private var toneGenerator: ToneGenerator? = null
 
+    // Mute support
+    private val _isMuted = MutableStateFlow(false)
+    val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
+
+    fun setMuted(muted: Boolean) {
+        _isMuted.value = muted
+        if (muted) {
+            audioRecordManager.stop()
+        } else if (_pipelineState.value != PipelineState.IDLE) {
+            audioRecordManager.start()
+            asr.reset()
+            _pipelineState.value = PipelineState.LISTENING
+        }
+    }
+
     fun initialize() {
         _pipelineState.value = PipelineState.INITIALIZING
         Log.i(TAG, "Initializing models...")
         asr.initialize()
         tts.initialize()
+        Log.i(TAG, "TTS has ${tts.numSpeakers()} voices available")
         toneGenerator = try {
             ToneGenerator(AudioManager.STREAM_MUSIC, 60)
         } catch (_: Exception) { null }
         Log.i(TAG, "All models initialized")
+    }
+
+    fun setVoiceId(sid: Int) {
+        tts.setSpeakerId(sid)
+        Log.i(TAG, "Voice changed to speaker $sid")
     }
 
     fun start(conversationId: String) {
@@ -112,6 +133,13 @@ class AudioPipelineManager @Inject constructor(
         val buffer = ShortArray(audioRecordManager.bufferSize)
 
         while (scope.isActive) {
+            // Skip audio processing when muted
+            if (_isMuted.value) {
+                _audioAmplitude.value = 0f
+                delay(100)
+                continue
+            }
+
             val ret = audioRecordManager.read(buffer)
             if (ret <= 0) {
                 if (ret < 0) {
@@ -158,6 +186,7 @@ class AudioPipelineManager @Inject constructor(
                 conversationRepository.addMessage(conversationId, MessageRole.USER, text)
 
                 _pipelineState.value = PipelineState.SENDING
+                speakCue("Let me think about that.")
                 val response = sendWithEntertainment(text)
 
                 if (response != null) {
@@ -169,12 +198,13 @@ class AudioPipelineManager @Inject constructor(
                     conversationRepository.addMessage(
                         conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
                     )
-                    tts.speak("I couldn't reach the server. I'll keep trying.")
+                    _pipelineState.value = PipelineState.SPEAKING
+                    speakCue("I couldn't reach the server. Please check your VPS connection in settings. I'll keep trying.")
                 }
 
                 // Back to listening
                 _pipelineState.value = PipelineState.LISTENING
-                playTone(ToneGenerator.TONE_PROP_BEEP)
+                speakCue("I'm listening.")
                 asr.reset()
             } else if (asr.partialResult.value.isNotBlank()) {
                 // We have partial text — show we're actively transcribing
@@ -232,6 +262,16 @@ class AudioPipelineManager @Inject constructor(
     private fun playTone(toneType: Int) {
         try {
             toneGenerator?.startTone(toneType, 150)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Speaks a short voice cue so the user knows what's happening
+     * (essential for hands-free / driving use).
+     */
+    private suspend fun speakCue(text: String) {
+        try {
+            tts.speak(text)
         } catch (_: Exception) {}
     }
 }

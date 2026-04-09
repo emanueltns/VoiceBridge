@@ -15,6 +15,7 @@ import javax.inject.Inject
 data class SettingsUiState(
     val host: String = "",
     val port: String = "9999",
+    val voiceId: Int = 0,
     val saved: Boolean = false,
 )
 
@@ -33,6 +34,7 @@ class SettingsViewModel @Inject constructor(
                     it.copy(
                         host = settings.host,
                         port = settings.port.toString(),
+                        voiceId = settings.voiceId,
                     )
                 }
             }
@@ -47,10 +49,16 @@ class SettingsViewModel @Inject constructor(
         _state.update { it.copy(port = port, saved = false) }
     }
 
+    fun onVoiceIdChanged(voiceId: Int) {
+        _state.update { it.copy(voiceId = voiceId, saved = false) }
+    }
+
     fun save() {
         viewModelScope.launch {
             val port = _state.value.port.toIntOrNull() ?: 9999
-            settingsRepository.saveSettings(ConnectionSettings(_state.value.host, port))
+            settingsRepository.saveSettings(
+                ConnectionSettings(_state.value.host, port, _state.value.voiceId),
+            )
             _state.update { it.copy(saved = true) }
         }
     }

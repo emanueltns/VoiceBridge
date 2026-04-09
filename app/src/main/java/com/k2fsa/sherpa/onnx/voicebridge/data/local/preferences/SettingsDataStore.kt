@@ -22,11 +22,13 @@ class SettingsDataStore @Inject constructor(
 ) {
     private val hostKey = stringPreferencesKey("vps_host")
     private val portKey = intPreferencesKey("vps_port")
+    private val voiceIdKey = intPreferencesKey("voice_id")
 
     val settings: Flow<ConnectionSettings> = context.dataStore.data.map { prefs ->
         ConnectionSettings(
             host = prefs[hostKey] ?: "",
             port = prefs[portKey] ?: 9999,
+            voiceId = prefs[voiceIdKey] ?: 0,
         )
     }
 
@@ -38,6 +40,7 @@ class SettingsDataStore @Inject constructor(
         context.dataStore.edit { prefs ->
             prefs[hostKey] = settings.host
             prefs[portKey] = settings.port
+            prefs[voiceIdKey] = settings.voiceId
         }
     }
 }

@@ -6,9 +6,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.ConversationDetailScreen
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.ConversationScreen
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.ConversationViewModel
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.history.HistoryScreen
@@ -46,6 +49,20 @@ fun VoiceBridgeNavGraph() {
             val viewModel: HistoryViewModel = hiltViewModel()
             HistoryScreen(
                 viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() },
+                onConversationClick = { conversationId ->
+                    navController.navigate(Screen.ConversationDetail.createRoute(conversationId))
+                },
+            )
+        }
+
+        composable(
+            route = Screen.ConversationDetail.route,
+            arguments = listOf(navArgument("conversationId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val conversationId = backStackEntry.arguments?.getString("conversationId") ?: return@composable
+            ConversationDetailScreen(
+                conversationId = conversationId,
                 onNavigateBack = { navController.popBackStack() },
             )
         }

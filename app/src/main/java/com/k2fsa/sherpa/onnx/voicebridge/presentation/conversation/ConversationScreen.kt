@@ -21,13 +21,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -39,30 +39,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.k2fsa.sherpa.onnx.voicebridge.domain.model.ConnectionState
 import com.k2fsa.sherpa.onnx.voicebridge.domain.model.PipelineState
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components.ActiveCallControls
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components.CallDurationTimer
-import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components.ClaudeOrb
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components.ConnectionDot
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components.IdleCallButton
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components.MessageHistorySheet
+import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components.MeshSphereOrb
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components.TranscriptOverlay
-import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.CallBackgroundBottom
-import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.CallBackgroundTop
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.TextPrimary
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.TextSecondary
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.TextTertiary
-
-private val callGradient = Brush.verticalGradient(
-    colors = listOf(CallBackgroundTop, CallBackgroundBottom),
-)
+import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.VBBackground
 
 @Composable
 fun ConversationScreen(
@@ -74,7 +67,6 @@ fun ConversationScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showMessages by remember { mutableStateOf(false) }
 
-    // Permission launcher
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
@@ -84,7 +76,6 @@ fun ConversationScreen(
         }
     }
 
-    // Show errors
     LaunchedEffect(state.error) {
         state.error?.let {
             snackbarHostState.showSnackbar(it)
@@ -95,13 +86,13 @@ fun ConversationScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(callGradient),
+            .background(VBBackground),
     ) {
         if (state.isRunning) {
             ActiveCallLayout(
                 state = state,
                 onEndCall = { viewModel.handleIntent(ConversationIntent.Stop) },
-                onNewConversation = { viewModel.handleIntent(ConversationIntent.NewConversation) },
+                onToggleMute = { viewModel.handleIntent(ConversationIntent.ToggleMute) },
                 onShowMessages = { showMessages = true },
                 onOpenSettings = onOpenSettings,
             )
@@ -121,16 +112,14 @@ fun ConversationScreen(
             )
         }
 
-        // Snackbar
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = 100.dp),
+                .padding(bottom = 120.dp),
         )
 
-        // Message history bottom sheet
         if (showMessages) {
             MessageHistorySheet(
                 messages = state.messages,
@@ -144,7 +133,7 @@ fun ConversationScreen(
 private fun ActiveCallLayout(
     state: ConversationUiState,
     onEndCall: () -> Unit,
-    onNewConversation: () -> Unit,
+    onToggleMute: () -> Unit,
     onShowMessages: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -155,70 +144,68 @@ private fun ActiveCallLayout(
             .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Top bar: connection + timer + settings
+        // Top bar: connection dot + status label + settings
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ConnectionDot(connectionState = state.connectionState)
             Spacer(modifier = Modifier.weight(1f))
-            CallDurationTimer(startTimeMs = state.callStartTimeMs)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                AnimatedContent(
+                    targetState = getStateLabel(state.pipelineState),
+                    transitionSpec = {
+                        (fadeIn(animationSpec = androidx.compose.animation.core.tween(300)) +
+                                slideInVertically { it / 2 })
+                            .togetherWith(
+                                fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) +
+                                        slideOutVertically { -it / 2 },
+                            )
+                    },
+                    label = "stateLabel",
+                ) { label ->
+                    Text(
+                        text = label,
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                CallDurationTimer(startTimeMs = state.callStartTimeMs)
+            }
             Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = onOpenSettings) {
-                Icon(
-                    Icons.Default.Settings,
-                    contentDescription = "Settings",
-                    tint = TextTertiary,
-                )
+                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextTertiary, modifier = Modifier.size(20.dp))
             }
         }
 
-        Spacer(modifier = Modifier.weight(0.15f))
+        Spacer(modifier = Modifier.weight(0.08f))
 
-        // Claude Orb
-        ClaudeOrb(
+        // The flowing mesh sphere
+        MeshSphereOrb(
             pipelineState = state.pipelineState,
             audioAmplitude = state.audioAmplitude,
+            size = 300.dp,
         )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // State label with animated transitions
-        AnimatedContent(
-            targetState = getStateLabel(state.pipelineState),
-            transitionSpec = {
-                (fadeIn(animationSpec = androidx.compose.animation.core.tween(300)) +
-                        slideInVertically { it / 2 })
-                    .togetherWith(
-                        fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) +
-                                slideOutVertically { -it / 2 }
-                    )
-            },
-            label = "stateLabel",
-        ) { label ->
-            Text(
-                text = label,
-                color = TextSecondary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Medium,
-            )
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         // Live transcript
         TranscriptOverlay(
             text = state.partialTranscript,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
         )
 
-        Spacer(modifier = Modifier.weight(0.25f))
+        Spacer(modifier = Modifier.weight(0.12f))
 
-        // Call controls
+        // 3 ring-style controls: chat, mic/mute, close
         ActiveCallControls(
-            onNewConversation = onNewConversation,
+            isMuted = state.isMuted,
+            onToggleMute = onToggleMute,
             onEndCall = onEndCall,
             onShowMessages = onShowMessages,
         )
@@ -240,53 +227,56 @@ private fun IdleLayout(
             .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // Top bar: history + settings
+        // Top bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.End,
         ) {
             IconButton(onClick = onNavigateToHistory) {
                 Icon(Icons.Default.History, contentDescription = "History", tint = TextTertiary)
             }
+            Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Default.Settings, contentDescription = "Settings", tint = TextTertiary)
             }
         }
 
-        Spacer(modifier = Modifier.weight(0.25f))
+        Spacer(modifier = Modifier.weight(0.08f))
 
-        // Dormant orb
-        ClaudeOrb(
-            pipelineState = PipelineState.IDLE,
-            audioAmplitude = 0f,
-            size = 180.dp,
-        )
-
-        Spacer(modifier = Modifier.height(28.dp))
-
+        // Small app name
         Text(
             text = "VoiceBridge",
-            color = TextPrimary,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
+            color = TextPrimary.copy(alpha = 0.5f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
         )
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        IdleCallButton(onClick = onStartCall)
+        // Dormant flowing mesh sphere
+        MeshSphereOrb(
+            pipelineState = PipelineState.IDLE,
+            audioAmplitude = 0f,
+            size = 260.dp,
+        )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "Tap to start a voice conversation",
-            color = TextTertiary,
-            fontSize = 14.sp,
+            text = "Tap to Start",
+            color = TextSecondary,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
         )
 
-        Spacer(modifier = Modifier.weight(0.35f))
+        Spacer(modifier = Modifier.weight(0.12f))
+
+        // Green call button
+        IdleCallButton(onClick = onStartCall)
+
+        Spacer(modifier = Modifier.weight(0.12f))
     }
 }
 
@@ -294,7 +284,7 @@ private fun getStateLabel(pipeline: PipelineState): String {
     return when (pipeline) {
         PipelineState.IDLE -> ""
         PipelineState.INITIALIZING -> "Loading models..."
-        PipelineState.LISTENING -> "Listening..."
+        PipelineState.LISTENING -> "Claude is listening.."
         PipelineState.TRANSCRIBING -> "Hearing you..."
         PipelineState.SENDING -> "Claude is thinking..."
         PipelineState.SPEAKING -> "Claude is speaking..."

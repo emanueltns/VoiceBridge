@@ -63,6 +63,7 @@ class ConversationViewModel @Inject constructor(
             is ConversationIntent.DismissError -> _state.update { it.copy(error = null) }
             is ConversationIntent.OpenHistory -> { /* handled by navigation */ }
             is ConversationIntent.OpenSettings -> { /* handled by navigation */ }
+            is ConversationIntent.ToggleMute -> toggleMute()
         }
     }
 
@@ -89,6 +90,13 @@ class ConversationViewModel @Inject constructor(
 
                 bindToService()
                 observeMessages(conversation.id)
+
+                // Apply voice setting
+                viewModelScope.launch {
+                    // Wait briefly for service to bind
+                    kotlinx.coroutines.delay(500)
+                    service?.setVoiceId(settings.voiceId)
+                }
 
                 _state.update {
                     it.copy(
@@ -134,6 +142,13 @@ class ConversationViewModel @Inject constructor(
         }
     }
 
+    private fun toggleMute() {
+        val svc = service ?: return
+        val newMuted = !_state.value.isMuted
+        svc.setMuted(newMuted)
+        _state.update { it.copy(isMuted = newMuted) }
+    }
+
     private fun bindToService() {
         if (!serviceBound) {
             val intent = Intent(application, VoiceBridgeForegroundService::class.java)
@@ -163,6 +178,11 @@ class ConversationViewModel @Inject constructor(
         viewModelScope.launch {
             svc.audioAmplitude.collect { amplitude ->
                 _state.update { it.copy(audioAmplitude = amplitude) }
+            }
+        }
+        viewModelScope.launch {
+            svc.isMuted.collect { muted ->
+                _state.update { it.copy(isMuted = muted) }
             }
         }
     }

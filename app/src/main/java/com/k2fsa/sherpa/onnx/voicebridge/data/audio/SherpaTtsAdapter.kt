@@ -30,8 +30,11 @@ class SherpaTtsAdapter @Inject constructor(
     @Volatile
     private var shouldStop = false
 
+    @Volatile
+    private var currentSid = 0
+
     override fun initialize() {
-        val modelDir = "kokoro-en-v0_19"
+        val modelDir = "kokoro-multi-lang-v1_0"
         val dataDir = assetCopier.copyDataDir("$modelDir/espeak-ng-data")
 
         val config = OfflineTtsConfig(
@@ -41,17 +44,26 @@ class SherpaTtsAdapter @Inject constructor(
                     voices = "$modelDir/voices.bin",
                     tokens = "$modelDir/tokens.txt",
                     dataDir = "$dataDir/$modelDir/espeak-ng-data",
+                    lexicon = "$modelDir/lexicon-us-en.txt,$modelDir/lexicon-zh.txt",
                 ),
                 numThreads = 4,
                 debug = false,
                 provider = "cpu",
             ),
-            maxNumSentences = 4,   // Process 4 sentences at once — fewer pauses
-            silenceScale = 0.05f,  // Minimal inter-sentence silence
+            maxNumSentences = 4,
+            silenceScale = 0.05f,
         )
 
         tts = OfflineTts(assetManager = assetManager, config = config)
         initAudioTrack()
+    }
+
+    override fun setSpeakerId(sid: Int) {
+        currentSid = sid
+    }
+
+    override fun numSpeakers(): Int {
+        return tts?.numSpeakers() ?: 1
     }
 
     override suspend fun speak(text: String) {
@@ -67,7 +79,7 @@ class SherpaTtsAdapter @Inject constructor(
 
         t.generateWithConfigAndCallback(
             text = text,
-            config = GenerationConfig(sid = 0, speed = 1.05f),
+            config = GenerationConfig(sid = currentSid, speed = 1.05f),
             callback = { samples ->
                 if (!shouldStop) {
                     track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)

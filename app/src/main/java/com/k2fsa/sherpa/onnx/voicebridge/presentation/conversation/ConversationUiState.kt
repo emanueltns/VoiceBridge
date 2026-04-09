@@ -13,6 +13,7 @@ data class ConversationUiState(
     val partialTranscript: String = "",
     val audioAmplitude: Float = 0f,
     val callStartTimeMs: Long? = null,
+    val isMuted: Boolean = false,
 )
 
 sealed class ConversationIntent {
@@ -22,4 +23,5 @@ sealed class ConversationIntent {
     data object DismissError : ConversationIntent()
     data object OpenHistory : ConversationIntent()
     data object OpenSettings : ConversationIntent()
+    data object ToggleMute : ConversationIntent()
 }

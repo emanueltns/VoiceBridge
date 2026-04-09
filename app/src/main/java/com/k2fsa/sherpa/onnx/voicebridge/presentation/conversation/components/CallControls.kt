@@ -1,38 +1,37 @@
 package com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.CallEnd
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.CallControlBg
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.CallGreen
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.CallRed
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.TextPrimary
+import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.TextTertiary
+import com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.VBBackground
 
 @Composable
 fun ActiveCallControls(
-    onNewConversation: () -> Unit,
+    isMuted: Boolean,
+    onToggleMute: () -> Unit,
     onEndCall: () -> Unit,
     onShowMessages: () -> Unit,
     modifier: Modifier = Modifier,
@@ -42,47 +41,57 @@ fun ActiveCallControls(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // New conversation
-        FilledIconButton(
-            onClick = onNewConversation,
-            modifier = Modifier.size(52.dp),
-            shape = CircleShape,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = CallControlBg,
-                contentColor = TextPrimary,
-            ),
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "New conversation", modifier = Modifier.size(22.dp))
-        }
-
-        Spacer(modifier = Modifier.width(32.dp))
-
-        // End call (larger)
-        FilledIconButton(
-            onClick = onEndCall,
-            modifier = Modifier.size(68.dp),
-            shape = CircleShape,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = CallRed,
-                contentColor = Color.White,
-            ),
-        ) {
-            Icon(Icons.Default.CallEnd, contentDescription = "End call", modifier = Modifier.size(30.dp))
-        }
-
-        Spacer(modifier = Modifier.width(32.dp))
-
-        // Messages
-        FilledIconButton(
+        // Chat / Messages button
+        OutlinedIconButton(
             onClick = onShowMessages,
             modifier = Modifier.size(52.dp),
             shape = CircleShape,
-            colors = IconButtonDefaults.filledIconButtonColors(
+            border = BorderStroke(1.dp, TextTertiary),
+            colors = IconButtonDefaults.outlinedIconButtonColors(
                 containerColor = CallControlBg,
                 contentColor = TextPrimary,
             ),
         ) {
-            Icon(Icons.Default.Forum, contentDescription = "Messages", modifier = Modifier.size(22.dp))
+            Icon(Icons.Default.Forum, contentDescription = "Messages", modifier = Modifier.size(20.dp))
+        }
+
+        Spacer(modifier = Modifier.width(28.dp))
+
+        // Mic / Mute toggle (center, larger)
+        OutlinedIconButton(
+            onClick = onToggleMute,
+            modifier = Modifier.size(72.dp),
+            shape = CircleShape,
+            border = BorderStroke(
+                2.dp,
+                if (isMuted) CallRed else CallGreen,
+            ),
+            colors = IconButtonDefaults.outlinedIconButtonColors(
+                containerColor = CallControlBg,
+                contentColor = if (isMuted) CallRed else CallGreen,
+            ),
+        ) {
+            Icon(
+                imageVector = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                contentDescription = if (isMuted) "Unmute" else "Mute",
+                modifier = Modifier.size(28.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.width(28.dp))
+
+        // Close / End call
+        OutlinedIconButton(
+            onClick = onEndCall,
+            modifier = Modifier.size(52.dp),
+            shape = CircleShape,
+            border = BorderStroke(1.dp, TextTertiary),
+            colors = IconButtonDefaults.outlinedIconButtonColors(
+                containerColor = CallControlBg,
+                contentColor = TextPrimary,
+            ),
+        ) {
+            Icon(Icons.Default.Close, contentDescription = "End call", modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -92,23 +101,15 @@ fun IdleCallButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Button(
+    FilledIconButton(
         onClick = onClick,
-        modifier = modifier
-            .width(220.dp)
-            .height(56.dp),
-        shape = RoundedCornerShape(28.dp),
-        colors = ButtonDefaults.buttonColors(
+        modifier = modifier.size(80.dp),
+        shape = CircleShape,
+        colors = IconButtonDefaults.filledIconButtonColors(
             containerColor = CallGreen,
-            contentColor = Color.White,
+            contentColor = VBBackground,
         ),
     ) {
-        Icon(
-            Icons.Default.Call,
-            contentDescription = null,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Text("Call Claude", fontSize = 17.sp)
+        Icon(Icons.Default.Call, contentDescription = "Start call", modifier = Modifier.size(32.dp))
     }
 }
