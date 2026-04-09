@@ -86,6 +86,8 @@ class AndroidAsrAdapter @Inject constructor(
         endpointDetected = false
         _partialResult.value = ""
         textBuffer.clear()
+        // Force stop current session so it can cleanly restart
+        stopListening()
         shouldBeListening = true
     }
 

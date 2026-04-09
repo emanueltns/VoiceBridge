@@ -186,9 +186,16 @@ class AudioPipelineManager @Inject constructor(
                     speakCue("I couldn't reach the server.")
                 }
             } finally {
-                // Restore mic state and resume listening
+                // Restore mic and fully restart ASR for next voice input
                 _isMuted.value = wasMuted
+                _partialResult.value = ""
+                _streamingResponse.value = ""
+
+                // Force ASR to clean restart
                 asr.reset()
+                // Small delay to let ASR settle before streaming loop resumes
+                delay(300)
+
                 _pipelineState.value = PipelineState.LISTENING
                 playTone(ToneGenerator.TONE_PROP_BEEP)
             }
