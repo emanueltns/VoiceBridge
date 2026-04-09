@@ -25,7 +25,7 @@ class NotificationHelper @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "VoiceBridge Service",
+                "freeapp Service",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
                 description = "Active conversation notification"
@@ -55,7 +55,7 @@ class NotificationHelper @Inject constructor(
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle("VoiceBridge")
+            .setContentTitle("freeapp")
             .setContentText(statusText)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)

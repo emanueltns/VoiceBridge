@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">VoiceBridge</string>
+    <string name="app_name">freeapp</string>
     <string name="start">Start Conversation</string>
     <string name="stop">Stop</string>
     <string name="status_idle">Tap Start to begin hands-free conversation with Claude</string>
