@@ -273,49 +273,61 @@ fun ConversationScreen(
             }
         }
 
-        // Bottom input bar
-        if (state.isRunning) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(TerminalHeaderBg)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("$", fontFamily = FontFamily.Monospace, fontSize = 15.sp, color = CallGreen, modifier = Modifier.padding(end = 8.dp))
-                OutlinedTextField(
-                    value = inputText,
-                    onValueChange = { inputText = it },
-                    placeholder = { Text("Type or speak...", fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TerminalDim) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(4.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = TerminalBg, unfocusedContainerColor = TerminalBg,
-                        focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent,
-                        focusedTextColor = Color(0xFFFF9944), unfocusedTextColor = Color(0xFFFF9944),
-                        cursorColor = CallGreen,
-                    ),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
-                    maxLines = 5,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                if (inputText.isNotBlank()) {
-                    FilledIconButton(
-                        onClick = {
-                            viewModel.handleIntent(ConversationIntent.SendText(inputText.trim()))
-                            inputText = ""
-                        },
-                        modifier = Modifier.size(36.dp), shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = CallGreen, contentColor = VBBackground),
-                    ) { Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(16.dp)) }
-                } else {
-                    OutlinedIconButton(
-                        onClick = { viewModel.handleIntent(ConversationIntent.Stop) },
-                        modifier = Modifier.size(36.dp), shape = CircleShape,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CallRed.copy(alpha = 0.5f)),
-                        colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = CallRed),
-                    ) { Icon(Icons.Default.Stop, contentDescription = "End", modifier = Modifier.size(16.dp)) }
-                }
+        // Bottom input bar — always visible when models are ready
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(TerminalHeaderBg)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("$", fontFamily = FontFamily.Monospace, fontSize = 15.sp, color = CallGreen, modifier = Modifier.padding(end = 8.dp))
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = { inputText = it },
+                placeholder = {
+                    Text(
+                        if (state.isRunning) "Type or speak..." else "Type a message...",
+                        fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TerminalDim,
+                    )
+                },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(4.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = TerminalBg, unfocusedContainerColor = TerminalBg,
+                    focusedBorderColor = Color.Transparent, unfocusedBorderColor = Color.Transparent,
+                    focusedTextColor = Color(0xFFFF9944), unfocusedTextColor = Color(0xFFFF9944),
+                    cursorColor = CallGreen,
+                ),
+                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
+                maxLines = 5,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            if (inputText.isNotBlank()) {
+                FilledIconButton(
+                    onClick = {
+                        if (!state.isRunning) {
+                            viewModel.handleIntent(ConversationIntent.Start)
+                        }
+                        viewModel.handleIntent(ConversationIntent.SendText(inputText.trim()))
+                        inputText = ""
+                    },
+                    modifier = Modifier.size(36.dp), shape = CircleShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = CallGreen, contentColor = VBBackground),
+                ) { Icon(Icons.Default.Send, contentDescription = "Send", modifier = Modifier.size(16.dp)) }
+            } else if (state.isRunning) {
+                OutlinedIconButton(
+                    onClick = { viewModel.handleIntent(ConversationIntent.Stop) },
+                    modifier = Modifier.size(36.dp), shape = CircleShape,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CallRed.copy(alpha = 0.5f)),
+                    colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = CallRed),
+                ) { Icon(Icons.Default.Stop, contentDescription = "End", modifier = Modifier.size(16.dp)) }
+            } else {
+                FilledIconButton(
+                    onClick = { viewModel.handleIntent(ConversationIntent.Start) },
+                    modifier = Modifier.size(36.dp), shape = CircleShape,
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = CallGreen, contentColor = VBBackground),
+                ) { Icon(Icons.Default.Mic, contentDescription = "Start", modifier = Modifier.size(16.dp)) }
             }
         }
 
