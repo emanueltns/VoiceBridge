@@ -199,6 +199,11 @@ class ConversationViewModel @Inject constructor(
                 _state.update { it.copy(isMuted = muted) }
             }
         }
+        viewModelScope.launch {
+            svc.streamingResponse.collect { text ->
+                _state.update { it.copy(streamingResponse = text) }
+            }
+        }
     }
 
     private fun observeMessages(conversationId: String) {

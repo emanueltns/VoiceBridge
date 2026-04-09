@@ -37,4 +37,44 @@ class VpsClient @Inject constructor() {
             Result.failure(e)
         }
     }
+
+    /**
+     * Streaming version: calls onChunk for each line as it arrives from the VPS.
+     * Returns the full accumulated text at the end.
+     */
+    fun sendAndReceiveStreaming(
+        host: String,
+        port: Int,
+        text: String,
+        timeoutMs: Int = 180_000,
+        onChunk: (accumulated: String) -> Unit,
+    ): Result<String> {
+        return try {
+            val socket = Socket(host, port)
+            socket.soTimeout = timeoutMs
+
+            val writer = PrintWriter(socket.getOutputStream(), true)
+            val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+
+            writer.print(text)
+            writer.flush()
+            socket.shutdownOutput()
+
+            val sb = StringBuilder()
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                if (line == "---END---") break
+                if (sb.isNotEmpty()) sb.appendLine()
+                sb.append(line)
+                // Emit accumulated text so far
+                onChunk(sb.toString())
+            }
+
+            socket.close()
+            Result.success(sb.toString().trim())
+        } catch (e: Exception) {
+            Log.e(TAG, "VPS streaming error: ${e.message}")
+            Result.failure(e)
+        }
+    }
 }

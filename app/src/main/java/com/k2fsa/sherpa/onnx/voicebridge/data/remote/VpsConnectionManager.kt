@@ -59,6 +59,22 @@ class VpsConnectionManager @Inject constructor(
         return result
     }
 
+    fun sendMessageStreaming(text: String, onChunk: (String) -> Unit): Result<String> {
+        _connectionState.value = ConnectionState.Connecting
+        val result = vpsClient.sendAndReceiveStreaming(
+            currentHost, currentPort, text, onChunk = onChunk,
+        )
+
+        if (result.isSuccess) {
+            retryCount = 0
+            _connectionState.value = ConnectionState.Connected(currentHost, currentPort)
+        } else {
+            scheduleReconnect()
+        }
+
+        return result
+    }
+
     private fun scheduleReconnect() {
         val delayMs = min(1000L * (1L shl min(retryCount, 6)), MAX_RETRY_DELAY_MS)
         retryCount++

@@ -15,6 +15,7 @@ data class ConversationUiState(
     val callStartTimeMs: Long? = null,
     val isMuted: Boolean = false,
     val modelsReady: Boolean = false,
+    val streamingResponse: String = "",
 )
 
 sealed class ConversationIntent {

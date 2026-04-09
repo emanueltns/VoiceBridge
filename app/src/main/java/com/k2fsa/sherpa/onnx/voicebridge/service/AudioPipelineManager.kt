@@ -65,6 +65,10 @@ class AudioPipelineManager @Inject constructor(
     private val _partialResult = MutableStateFlow("")
     val partialResult: StateFlow<String> = _partialResult.asStateFlow()
 
+    // Streaming response text (shows Claude's reply as it arrives)
+    private val _streamingResponse = MutableStateFlow("")
+    val streamingResponse: StateFlow<String> = _streamingResponse.asStateFlow()
+
     private val _audioAmplitude = MutableStateFlow(0f)
     val audioAmplitude: StateFlow<Float> = _audioAmplitude.asStateFlow()
 
@@ -156,17 +160,26 @@ class AudioPipelineManager @Inject constructor(
                 conversationRepository.addMessage(conversationId, MessageRole.USER, text)
 
                 _pipelineState.value = PipelineState.SENDING
-                val response = sendWithEntertainment(text)
+                _streamingResponse.value = ""
 
-                if (response != null) {
-                    conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, response)
+                val response = withContext(Dispatchers.IO) {
+                    vpsRepository.sendMessageStreaming(text) { accumulated ->
+                        _streamingResponse.value = accumulated
+                    }
+                }
+                val responseText = response.getOrNull()
+
+                if (responseText != null) {
+                    conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, responseText)
                     _pipelineState.value = PipelineState.SPEAKING
-                    tts.speak(response)
+                    _streamingResponse.value = ""
+                    tts.speak(responseText)
                 } else {
                     conversationRepository.addMessage(
                         conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
                     )
                     _pipelineState.value = PipelineState.SPEAKING
+                    _streamingResponse.value = ""
                     speakCue("I couldn't reach the server.")
                 }
             } finally {
@@ -316,19 +329,30 @@ class AudioPipelineManager @Inject constructor(
         conversationRepository.addMessage(conversationId, MessageRole.USER, text)
 
         _pipelineState.value = PipelineState.SENDING
-        val response = sendWithEntertainment(text)
+        _streamingResponse.value = ""
 
-        if (response != null) {
-            conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, response)
+        // Stream the response — show text live as it arrives from VPS
+        val response = withContext(Dispatchers.IO) {
+            vpsRepository.sendMessageStreaming(text) { accumulated ->
+                _streamingResponse.value = accumulated
+            }
+        }
+
+        val responseText = response.getOrNull()
+
+        if (responseText != null) {
+            conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, responseText)
             playTone(ToneGenerator.TONE_PROP_ACK)
             _pipelineState.value = PipelineState.SPEAKING
-            tts.speak(response)
+            _streamingResponse.value = ""
+            tts.speak(responseText)
         } else {
             conversationRepository.addMessage(
                 conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
             )
             _pipelineState.value = PipelineState.SPEAKING
-            speakCue("I couldn't reach the server. Please check your VPS connection in settings. I'll keep trying.")
+            _streamingResponse.value = ""
+            speakCue("I couldn't reach the server. Please check your VPS connection in settings.")
         }
 
         asr.reset()

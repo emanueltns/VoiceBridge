@@ -8,4 +8,5 @@ interface VpsRepository {
     suspend fun connect(host: String, port: Int)
     suspend fun disconnect()
     suspend fun sendMessage(text: String): Result<String>
+    suspend fun sendMessageStreaming(text: String, onChunk: (String) -> Unit): Result<String>
 }

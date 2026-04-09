@@ -29,4 +29,10 @@ class VpsRepositoryImpl @Inject constructor(
             connectionManager.sendMessage(text)
         }
     }
+
+    override suspend fun sendMessageStreaming(text: String, onChunk: (String) -> Unit): Result<String> {
+        return withContext(Dispatchers.IO) {
+            connectionManager.sendMessageStreaming(text, onChunk)
+        }
+    }
 }

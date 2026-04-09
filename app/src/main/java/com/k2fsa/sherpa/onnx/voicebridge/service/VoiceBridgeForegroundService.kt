@@ -39,6 +39,9 @@ class VoiceBridgeForegroundService : Service() {
     val audioAmplitude: StateFlow<Float>
         get() = pipelineManager.audioAmplitude
 
+    val streamingResponse: StateFlow<String>
+        get() = pipelineManager.streamingResponse
+
     val isMuted: StateFlow<Boolean>
         get() = pipelineManager.isMuted
 

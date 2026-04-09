@@ -196,13 +196,29 @@ private fun ActiveCallLayout(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Live transcript
+        // Live transcript (what user is saying)
         TranscriptOverlay(
             text = state.partialTranscript,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
         )
+
+        // Streaming response (Claude's reply arriving in real-time)
+        if (state.streamingResponse.isNotBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = state.streamingResponse,
+                color = com.k2fsa.sherpa.onnx.voicebridge.presentation.theme.CallGreen.copy(alpha = 0.8f),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 6,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+            )
+        }
 
         Spacer(modifier = Modifier.weight(0.12f))
 

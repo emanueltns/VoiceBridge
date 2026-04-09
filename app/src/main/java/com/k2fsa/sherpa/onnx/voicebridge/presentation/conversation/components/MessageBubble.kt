@@ -1,70 +1,78 @@
 package com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.k2fsa.sherpa.onnx.voicebridge.domain.model.Message
 import com.k2fsa.sherpa.onnx.voicebridge.domain.model.MessageRole
 
+// Terminal colors
+private val TerminalPrompt = Color(0xFFFF9944)   // Orange for $ prompt
+private val TerminalUserText = Color(0xFF999999)  // Dim gray for user input
+private val TerminalResponse = Color(0xFFC0C0E0)  // Light gray for Claude
+private val TerminalHighlight = Color(0xFF00FF41) // Green for key output
+private val TerminalError = Color(0xFFFF4444)     // Red for errors
+
+/**
+ * Terminal-style message display.
+ * User: $ "message"
+ * Claude: plain text
+ * System: red text
+ */
 @Composable
 fun MessageBubble(
     message: Message,
     modifier: Modifier = Modifier,
 ) {
-    val isUser = message.role == MessageRole.USER
-    val isSystem = message.role == MessageRole.SYSTEM
-
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+            .padding(horizontal = 16.dp, vertical = 3.dp),
     ) {
-        Surface(
-            shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (isUser) 16.dp else 4.dp,
-                bottomEnd = if (isUser) 4.dp else 16.dp,
-            ),
-            color = when {
-                isUser -> MaterialTheme.colorScheme.primary
-                isSystem -> MaterialTheme.colorScheme.errorContainer
-                else -> MaterialTheme.colorScheme.secondaryContainer
-            },
-            modifier = Modifier.widthIn(max = 280.dp),
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                if (!isUser) {
+        when (message.role) {
+            MessageRole.USER -> {
+                Text(
+                    text = "$ \"${message.text}\"",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = TerminalPrompt,
+                    lineHeight = 18.sp,
+                )
+            }
+            MessageRole.ASSISTANT -> {
+                // Split into lines, highlight last line green (like terminal "result")
+                val lines = message.text.lines()
+                for ((index, line) in lines.withIndex()) {
+                    if (line.isBlank()) continue
+                    val isLastLine = index == lines.lastIndex
                     Text(
-                        text = if (isSystem) "System" else "Claude",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = when {
-                            isSystem -> MaterialTheme.colorScheme.onErrorContainer
-                            else -> MaterialTheme.colorScheme.onSecondaryContainer
-                        },
+                        text = line,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp,
+                        color = if (isLastLine && lines.size > 1) TerminalHighlight else TerminalResponse,
+                        lineHeight = 18.sp,
                     )
                 }
+            }
+            MessageRole.SYSTEM -> {
                 Text(
-                    text = message.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = when {
-                        isUser -> MaterialTheme.colorScheme.onPrimary
-                        isSystem -> MaterialTheme.colorScheme.onErrorContainer
-                        else -> MaterialTheme.colorScheme.onSecondaryContainer
-                    },
+                    text = "! ${message.text}",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    color = TerminalError,
+                    lineHeight = 18.sp,
                 )
             }
         }
+        Spacer(modifier = Modifier.height(2.dp))
     }
 }
