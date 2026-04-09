@@ -25,4 +25,5 @@ sealed class ConversationIntent {
     data object OpenHistory : ConversationIntent()
     data object OpenSettings : ConversationIntent()
     data object ToggleMute : ConversationIntent()
+    data class SendText(val text: String) : ConversationIntent()
 }

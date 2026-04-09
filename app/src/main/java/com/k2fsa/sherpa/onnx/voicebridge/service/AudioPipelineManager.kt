@@ -118,6 +118,44 @@ class AudioPipelineManager @Inject constructor(
         pipelineJob = scope.launch { streamingLoop() }
     }
 
+    /**
+     * Send a typed text message through the pipeline (same flow as voice,
+     * but bypasses ASR). Mutes mic while processing to avoid collision.
+     */
+    fun sendTextMessage(text: String) {
+        val conversationId = _currentConversationId.value ?: return
+        scope.launch {
+            // Temporarily pause the mic so the streaming loop doesn't interfere
+            val wasMuted = _isMuted.value
+            _isMuted.value = true
+
+            try {
+                conversationRepository.addMessage(conversationId, MessageRole.USER, text)
+
+                _pipelineState.value = PipelineState.SENDING
+                val response = sendWithEntertainment(text)
+
+                if (response != null) {
+                    conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, response)
+                    _pipelineState.value = PipelineState.SPEAKING
+                    tts.speak(response)
+                } else {
+                    conversationRepository.addMessage(
+                        conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
+                    )
+                    _pipelineState.value = PipelineState.SPEAKING
+                    speakCue("I couldn't reach the server.")
+                }
+            } finally {
+                // Restore mic state and resume listening
+                _isMuted.value = wasMuted
+                asr.reset()
+                _pipelineState.value = PipelineState.LISTENING
+                playTone(ToneGenerator.TONE_PROP_BEEP)
+            }
+        }
+    }
+
     fun stop() {
         pipelineJob?.cancel()
         pipelineJob = null

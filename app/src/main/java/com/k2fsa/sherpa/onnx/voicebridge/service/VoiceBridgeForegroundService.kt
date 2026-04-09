@@ -50,6 +50,10 @@ class VoiceBridgeForegroundService : Service() {
         pipelineManager.setVoiceId(sid)
     }
 
+    fun sendTextMessage(text: String) {
+        pipelineManager.sendTextMessage(text)
+    }
+
     inner class LocalBinder : Binder() {
         val service: VoiceBridgeForegroundService
             get() = this@VoiceBridgeForegroundService

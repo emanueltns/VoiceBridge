@@ -125,6 +125,9 @@ fun ConversationScreen(
             MessageHistorySheet(
                 messages = state.messages,
                 onDismiss = { showMessages = false },
+                onSendText = if (state.isRunning) { text ->
+                    viewModel.handleIntent(ConversationIntent.SendText(text))
+                } else null,
             )
         }
     }

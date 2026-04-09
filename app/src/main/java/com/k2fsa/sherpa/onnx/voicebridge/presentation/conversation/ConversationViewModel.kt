@@ -75,6 +75,7 @@ class ConversationViewModel @Inject constructor(
             is ConversationIntent.OpenHistory -> { /* handled by navigation */ }
             is ConversationIntent.OpenSettings -> { /* handled by navigation */ }
             is ConversationIntent.ToggleMute -> toggleMute()
+            is ConversationIntent.SendText -> sendTextMessage(intent.text)
         }
     }
 
@@ -151,6 +152,11 @@ class ConversationViewModel @Inject constructor(
                 ContextCompat.startForegroundService(application, serviceIntent)
             }
         }
+    }
+
+    private fun sendTextMessage(text: String) {
+        if (text.isBlank()) return
+        service?.sendTextMessage(text)
     }
 
     private fun toggleMute() {
