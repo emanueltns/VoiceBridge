@@ -18,6 +18,7 @@ data class SettingsUiState(
     val voiceId: Int = 0,
     val useAndroidAsr: Boolean = false,
     val funFactsEnabled: Boolean = true,
+    val userName: String = "",
     val saved: Boolean = false,
 )
 
@@ -39,37 +40,26 @@ class SettingsViewModel @Inject constructor(
                         voiceId = settings.voiceId,
                         useAndroidAsr = settings.useAndroidAsr,
                         funFactsEnabled = settings.funFactsEnabled,
+                        userName = settings.userName,
                     )
                 }
             }
         }
     }
 
-    fun onHostChanged(host: String) {
-        _state.update { it.copy(host = host, saved = false) }
-    }
-
-    fun onPortChanged(port: String) {
-        _state.update { it.copy(port = port, saved = false) }
-    }
-
-    fun onVoiceIdChanged(voiceId: Int) {
-        _state.update { it.copy(voiceId = voiceId, saved = false) }
-    }
-
-    fun onFunFactsChanged(enabled: Boolean) {
-        _state.update { it.copy(funFactsEnabled = enabled, saved = false) }
-    }
-
-    fun onAsrEngineChanged(useAndroid: Boolean) {
-        _state.update { it.copy(useAndroidAsr = useAndroid, saved = false) }
-    }
+    fun onHostChanged(host: String) { _state.update { it.copy(host = host, saved = false) } }
+    fun onPortChanged(port: String) { _state.update { it.copy(port = port, saved = false) } }
+    fun onVoiceIdChanged(voiceId: Int) { _state.update { it.copy(voiceId = voiceId, saved = false) } }
+    fun onFunFactsChanged(enabled: Boolean) { _state.update { it.copy(funFactsEnabled = enabled, saved = false) } }
+    fun onAsrEngineChanged(useAndroid: Boolean) { _state.update { it.copy(useAndroidAsr = useAndroid, saved = false) } }
+    fun onUserNameChanged(name: String) { _state.update { it.copy(userName = name, saved = false) } }
 
     fun save() {
         viewModelScope.launch {
             val port = _state.value.port.toIntOrNull() ?: 9999
+            val s = _state.value
             settingsRepository.saveSettings(
-                ConnectionSettings(_state.value.host, port, _state.value.voiceId, _state.value.useAndroidAsr, _state.value.funFactsEnabled),
+                ConnectionSettings(s.host, port, s.voiceId, s.useAndroidAsr, s.funFactsEnabled, s.userName),
             )
             _state.update { it.copy(saved = true) }
         }

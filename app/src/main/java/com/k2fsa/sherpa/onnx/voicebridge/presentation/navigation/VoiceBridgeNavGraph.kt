@@ -1,28 +1,18 @@
 package com.k2fsa.sherpa.onnx.voicebridge.presentation.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
-import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.ConversationDetailScreen
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.ConversationScreen
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.ConversationViewModel
-import com.k2fsa.sherpa.onnx.voicebridge.presentation.history.HistoryScreen
-import com.k2fsa.sherpa.onnx.voicebridge.presentation.history.HistoryViewModel
-import com.k2fsa.sherpa.onnx.voicebridge.presentation.settings.SettingsBottomSheet
+import com.k2fsa.sherpa.onnx.voicebridge.presentation.settings.SettingsScreen
 import com.k2fsa.sherpa.onnx.voicebridge.presentation.settings.SettingsViewModel
 
 @Composable
 fun VoiceBridgeNavGraph() {
     val navController = rememberNavController()
-    var showSettings by remember { mutableStateOf(false) }
 
     NavHost(
         navController = navController,
@@ -32,37 +22,14 @@ fun VoiceBridgeNavGraph() {
             val viewModel: ConversationViewModel = hiltViewModel()
             ConversationScreen(
                 viewModel = viewModel,
-                onNavigateToHistory = { navController.navigate(Screen.History.route) },
-                onOpenSettings = { showSettings = true },
+                onOpenSettings = { navController.navigate(Screen.Settings.route) },
             )
-
-            if (showSettings) {
-                val settingsViewModel: SettingsViewModel = hiltViewModel()
-                SettingsBottomSheet(
-                    viewModel = settingsViewModel,
-                    onDismiss = { showSettings = false },
-                )
-            }
         }
 
-        composable(Screen.History.route) {
-            val viewModel: HistoryViewModel = hiltViewModel()
-            HistoryScreen(
+        composable(Screen.Settings.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsScreen(
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() },
-                onConversationClick = { conversationId ->
-                    navController.navigate(Screen.ConversationDetail.createRoute(conversationId))
-                },
-            )
-        }
-
-        composable(
-            route = Screen.ConversationDetail.route,
-            arguments = listOf(navArgument("conversationId") { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val conversationId = backStackEntry.arguments?.getString("conversationId") ?: return@composable
-            ConversationDetailScreen(
-                conversationId = conversationId,
                 onNavigateBack = { navController.popBackStack() },
             )
         }

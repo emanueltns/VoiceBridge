@@ -6,4 +6,5 @@ data class ConnectionSettings(
     val voiceId: Int = 0,
     val useAndroidAsr: Boolean = false,
     val funFactsEnabled: Boolean = true,
+    val userName: String = "",
 )

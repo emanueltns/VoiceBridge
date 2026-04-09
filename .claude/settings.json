@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/emanueltanasa/Documents/VoiceBridge -type f \\\\\\( -name \"*.kt\" -o -name \"*.xml\" \\\\\\) ! -path \"*/build/*\" ! -path \"*/.gradle/*\" -exec grep -l \"ConnectionDot\\\\|CallDurationTimer\\\\|TranscriptOverlay\\\\|MessageHistorySheet\" {} \\\\;)"
+    ]
+  }
+}

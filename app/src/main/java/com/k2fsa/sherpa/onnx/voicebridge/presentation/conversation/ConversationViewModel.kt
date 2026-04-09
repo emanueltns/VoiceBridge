@@ -56,6 +56,17 @@ class ConversationViewModel @Inject constructor(
     init {
         observeConnectionState()
         observeModelsReady()
+        loadUserName()
+    }
+
+    private fun loadUserName() {
+        viewModelScope.launch {
+            val settings = settingsRepository.getSettings()
+            _state.update { it.copy(userName = settings.userName) }
+            if (settings.host.isBlank()) {
+                _state.update { it.copy(needsSetup = true) }
+            }
+        }
     }
 
     private fun observeModelsReady() {
@@ -68,33 +79,32 @@ class ConversationViewModel @Inject constructor(
 
     fun handleIntent(intent: ConversationIntent) {
         when (intent) {
-            is ConversationIntent.Start -> startConversation()
-            is ConversationIntent.Stop -> stopConversation()
-            is ConversationIntent.NewConversation -> newConversation()
+            is ConversationIntent.Start -> startSession()
+            is ConversationIntent.Stop -> stopSession()
             is ConversationIntent.DismissError -> _state.update { it.copy(error = null) }
-            is ConversationIntent.OpenHistory -> { /* handled by navigation */ }
-            is ConversationIntent.OpenSettings -> { /* handled by navigation */ }
             is ConversationIntent.ToggleMute -> toggleMute()
             is ConversationIntent.SendText -> sendTextMessage(intent.text)
         }
     }
 
-    private fun startConversation() {
+    fun startSession() {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
             if (settings.host.isBlank()) {
-                _state.update { it.copy(error = "Please configure VPS host in settings") }
+                _state.update { it.copy(needsSetup = true) }
                 return@launch
             }
+
+            _state.update { it.copy(needsSetup = false, userName = settings.userName) }
 
             try {
                 vpsRepository.connect(settings.host, settings.port)
 
-                // Apply settings BEFORE starting the pipeline
                 pipelineManager.setAsrEngine(settings.useAndroidAsr)
                 pipelineManager.setVoiceId(settings.voiceId)
                 pipelineManager.funFactsEnabled = settings.funFactsEnabled
 
+                // Always use one conversation
                 val conversation = conversationRepository.getLastActiveConversationId()?.let {
                     conversationRepository.getConversation(it)
                 } ?: conversationRepository.createConversation()
@@ -108,19 +118,14 @@ class ConversationViewModel @Inject constructor(
                 bindToService()
                 observeMessages(conversation.id)
 
-                _state.update {
-                    it.copy(
-                        isRunning = true,
-                        callStartTimeMs = System.currentTimeMillis(),
-                    )
-                }
+                _state.update { it.copy(isRunning = true) }
             } catch (e: Exception) {
-                _state.update { it.copy(error = "Failed to start: ${e.message}") }
+                _state.update { it.copy(error = "Failed to connect: ${e.message}") }
             }
         }
     }
 
-    private fun stopConversation() {
+    private fun stopSession() {
         val serviceIntent = Intent(application, VoiceBridgeForegroundService::class.java).apply {
             action = ServiceCommand.ACTION_STOP
         }
@@ -129,26 +134,9 @@ class ConversationViewModel @Inject constructor(
             it.copy(
                 isRunning = false,
                 pipelineState = PipelineState.IDLE,
-                callStartTimeMs = null,
                 audioAmplitude = 0f,
                 partialTranscript = "",
             )
-        }
-    }
-
-    private fun newConversation() {
-        viewModelScope.launch {
-            val conversation = conversationRepository.createConversation()
-            observeMessages(conversation.id)
-
-            // Restart service with new conversation
-            if (_state.value.isRunning) {
-                val serviceIntent = Intent(application, VoiceBridgeForegroundService::class.java).apply {
-                    action = ServiceCommand.ACTION_START
-                    putExtra("conversation_id", conversation.id)
-                }
-                ContextCompat.startForegroundService(application, serviceIntent)
-            }
         }
     }
 
@@ -173,38 +161,11 @@ class ConversationViewModel @Inject constructor(
 
     private fun observeService() {
         val svc = service ?: return
-        viewModelScope.launch {
-            svc.pipelineState.collect { pipelineState ->
-                _state.update { it.copy(pipelineState = pipelineState) }
-            }
-        }
-        viewModelScope.launch {
-            svc.currentConversationId.collect { convId ->
-                if (convId != null) {
-                    observeMessages(convId)
-                }
-            }
-        }
-        viewModelScope.launch {
-            svc.partialResult.collect { partial ->
-                _state.update { it.copy(partialTranscript = partial) }
-            }
-        }
-        viewModelScope.launch {
-            svc.audioAmplitude.collect { amplitude ->
-                _state.update { it.copy(audioAmplitude = amplitude) }
-            }
-        }
-        viewModelScope.launch {
-            svc.isMuted.collect { muted ->
-                _state.update { it.copy(isMuted = muted) }
-            }
-        }
-        viewModelScope.launch {
-            svc.streamingResponse.collect { text ->
-                _state.update { it.copy(streamingResponse = text) }
-            }
-        }
+        viewModelScope.launch { svc.pipelineState.collect { ps -> _state.update { it.copy(pipelineState = ps) } } }
+        viewModelScope.launch { svc.partialResult.collect { p -> _state.update { it.copy(partialTranscript = p) } } }
+        viewModelScope.launch { svc.audioAmplitude.collect { a -> _state.update { it.copy(audioAmplitude = a) } } }
+        viewModelScope.launch { svc.isMuted.collect { m -> _state.update { it.copy(isMuted = m) } } }
+        viewModelScope.launch { svc.streamingResponse.collect { t -> _state.update { it.copy(streamingResponse = t) } } }
     }
 
     private fun observeMessages(conversationId: String) {
@@ -225,9 +186,7 @@ class ConversationViewModel @Inject constructor(
 
     override fun onCleared() {
         if (serviceBound) {
-            try {
-                application.unbindService(serviceConnection)
-            } catch (_: Exception) {}
+            try { application.unbindService(serviceConnection) } catch (_: Exception) {}
             serviceBound = false
         }
         super.onCleared()

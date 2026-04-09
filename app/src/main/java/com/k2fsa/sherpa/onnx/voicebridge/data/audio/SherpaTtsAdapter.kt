@@ -91,7 +91,7 @@ class SherpaTtsAdapter @Inject constructor(
 
                     t.generateWithConfigAndCallback(
                         text = sentence,
-                        config = GenerationConfig(sid = currentSid, speed = 1.1f),
+                        config = GenerationConfig(sid = currentSid, speed = 1.0f),
                         callback = { samples ->
                             if (!shouldStop) {
                                 track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
@@ -114,26 +114,37 @@ class SherpaTtsAdapter @Inject constructor(
     }
 
     /**
-     * Splits text into sentences, keeping punctuation attached.
-     * Groups very short fragments together to avoid tiny TTS calls.
+     * Splits text into small chunks for smooth TTS playback.
+     * Each chunk = one sentence. Long sentences split on commas/semicolons.
+     * Max ~80 chars per chunk to keep generation fast and speech natural.
      */
     private fun splitSentences(text: String): List<String> {
-        // Split on sentence boundaries
-        val raw = text.split(Regex("(?<=[.!?])\\s+"))
-        if (raw.size <= 1) return listOf(text)
-
-        // Group short fragments together (< 40 chars) to reduce gaps
+        // First split on sentence boundaries
+        val sentences = text.split(Regex("(?<=[.!?])\\s+"))
         val result = mutableListOf<String>()
-        val buffer = StringBuilder()
-        for (part in raw) {
-            buffer.append(part).append(" ")
-            if (buffer.length >= 40) {
-                result.add(buffer.toString().trim())
-                buffer.clear()
+
+        for (sentence in sentences) {
+            val trimmed = sentence.trim()
+            if (trimmed.isBlank()) continue
+
+            if (trimmed.length <= 80) {
+                result.add(trimmed)
+            } else {
+                // Break long sentences on commas, semicolons, colons, dashes
+                val parts = trimmed.split(Regex("(?<=[,;:\\-])\\s+"))
+                val buffer = StringBuilder()
+                for (part in parts) {
+                    if (buffer.length + part.length > 80 && buffer.isNotEmpty()) {
+                        result.add(buffer.toString().trim())
+                        buffer.clear()
+                    }
+                    if (buffer.isNotEmpty()) buffer.append(" ")
+                    buffer.append(part)
+                }
+                if (buffer.isNotBlank()) {
+                    result.add(buffer.toString().trim())
+                }
             }
-        }
-        if (buffer.isNotBlank()) {
-            result.add(buffer.toString().trim())
         }
         return result
     }

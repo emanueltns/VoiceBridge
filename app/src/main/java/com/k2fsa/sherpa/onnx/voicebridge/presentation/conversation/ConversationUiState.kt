@@ -12,19 +12,17 @@ data class ConversationUiState(
     val error: String? = null,
     val partialTranscript: String = "",
     val audioAmplitude: Float = 0f,
-    val callStartTimeMs: Long? = null,
     val isMuted: Boolean = false,
     val modelsReady: Boolean = false,
     val streamingResponse: String = "",
+    val userName: String = "",
+    val needsSetup: Boolean = false,
 )
 
 sealed class ConversationIntent {
     data object Start : ConversationIntent()
     data object Stop : ConversationIntent()
-    data object NewConversation : ConversationIntent()
     data object DismissError : ConversationIntent()
-    data object OpenHistory : ConversationIntent()
-    data object OpenSettings : ConversationIntent()
     data object ToggleMute : ConversationIntent()
     data class SendText(val text: String) : ConversationIntent()
 }
