@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -23,12 +24,14 @@ class SettingsDataStore @Inject constructor(
     private val hostKey = stringPreferencesKey("vps_host")
     private val portKey = intPreferencesKey("vps_port")
     private val voiceIdKey = intPreferencesKey("voice_id")
+    private val useAndroidAsrKey = booleanPreferencesKey("use_android_asr")
 
     val settings: Flow<ConnectionSettings> = context.dataStore.data.map { prefs ->
         ConnectionSettings(
             host = prefs[hostKey] ?: "",
             port = prefs[portKey] ?: 9999,
             voiceId = prefs[voiceIdKey] ?: 0,
+            useAndroidAsr = prefs[useAndroidAsrKey] ?: false,
         )
     }
 
@@ -41,6 +44,7 @@ class SettingsDataStore @Inject constructor(
             prefs[hostKey] = settings.host
             prefs[portKey] = settings.port
             prefs[voiceIdKey] = settings.voiceId
+            prefs[useAndroidAsrKey] = settings.useAndroidAsr
         }
     }
 }

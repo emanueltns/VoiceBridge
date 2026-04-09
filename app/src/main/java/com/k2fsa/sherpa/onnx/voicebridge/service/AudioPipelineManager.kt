@@ -26,6 +26,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 private const val TAG = "AudioPipeline"
@@ -33,20 +34,36 @@ private const val ENTERTAINMENT_DELAY_MS = 3000L
 
 @Singleton
 class AudioPipelineManager @Inject constructor(
-    private val asr: SpeechRecognitionService,
+    @Named("sherpa") private val sherpaAsr: SpeechRecognitionService,
+    @Named("android") private val androidAsr: SpeechRecognitionService,
     private val tts: TextToSpeechService,
     private val audioRecordManager: AudioRecordManager,
     private val conversationRepository: ConversationRepository,
     private val vpsRepository: VpsRepository,
     private val entertainmentUseCase: GetIdleEntertainmentUseCase,
 ) {
+    // Active ASR engine (switchable at runtime)
+    private var asr: SpeechRecognitionService = sherpaAsr
+    private var useAndroidAsr = false
+
+    fun setAsrEngine(useAndroid: Boolean) {
+        if (useAndroid == useAndroidAsr) return
+        val wasRunning = _pipelineState.value != PipelineState.IDLE
+        if (wasRunning) asr.reset()
+
+        useAndroidAsr = useAndroid
+        asr = if (useAndroid) androidAsr else sherpaAsr
+        Log.i(TAG, "ASR engine switched to: ${if (useAndroid) "Android" else "Sherpa (Nemotron)"}")
+    }
     private val _pipelineState = MutableStateFlow(PipelineState.IDLE)
     val pipelineState: StateFlow<PipelineState> = _pipelineState.asStateFlow()
 
     private val _currentConversationId = MutableStateFlow<String?>(null)
     val currentConversationId: StateFlow<String?> = _currentConversationId.asStateFlow()
 
-    val partialResult: StateFlow<String> get() = asr.partialResult
+    // Own StateFlow so observers don't break when ASR engine switches
+    private val _partialResult = MutableStateFlow("")
+    val partialResult: StateFlow<String> = _partialResult.asStateFlow()
 
     private val _audioAmplitude = MutableStateFlow(0f)
     val audioAmplitude: StateFlow<Float> = _audioAmplitude.asStateFlow()
@@ -85,7 +102,8 @@ class AudioPipelineManager @Inject constructor(
 
         _pipelineState.value = PipelineState.INITIALIZING
         Log.i(TAG, "Initializing models...")
-        asr.initialize()
+        sherpaAsr.initialize()
+        androidAsr.initialize()
         tts.initialize()
         Log.i(TAG, "TTS has ${tts.numSpeakers()} voices available")
         toneGenerator = try {
@@ -106,10 +124,15 @@ class AudioPipelineManager @Inject constructor(
     fun start(conversationId: String) {
         _currentConversationId.value = conversationId
 
-        if (!audioRecordManager.start()) {
-            Log.e(TAG, "Failed to start audio recording")
-            return
+        if (!useAndroidAsr) {
+            // Sherpa needs AudioRecordManager for mic input
+            if (!audioRecordManager.start()) {
+                Log.e(TAG, "Failed to start audio recording")
+                return
+            }
         }
+        // Android ASR manages its own mic — don't start AudioRecordManager
+        // (they fight over the mic and SpeechRecognizer gets nothing)
 
         asr.reset()
         _pipelineState.value = PipelineState.LISTENING
@@ -174,19 +197,63 @@ class AudioPipelineManager @Inject constructor(
         toneGenerator = null
     }
 
-    /**
-     * Main streaming loop:
-     * 1. Continuously reads audio and feeds it to the streaming ASR
-     * 2. ASR processes in real-time, partial results update live
-     * 3. When ASR detects an endpoint (natural pause), grab final text
-     * 4. Send to VPS, entertain while waiting, speak response
-     * 5. Resume listening immediately
-     */
     private suspend fun streamingLoop() {
+        if (useAndroidAsr) {
+            androidAsrLoop()
+        } else {
+            sherpaAsrLoop()
+        }
+    }
+
+    /**
+     * Loop for Android SpeechRecognizer: polls for results.
+     * No AudioRecordManager — SpeechRecognizer has exclusive mic access.
+     * Orb amplitude comes from partial result changes instead.
+     */
+    private suspend fun androidAsrLoop() {
+        var lastPartial = ""
+
+        while (scope.isActive) {
+            if (_isMuted.value) {
+                _audioAmplitude.value = 0f
+                delay(100)
+                continue
+            }
+
+            // Trigger Android ASR to keep listening
+            asr.feedAudio(FloatArray(0))
+
+            // Sync partial results from ASR into our own flow
+            val currentPartial = asr.partialResult.value
+            _partialResult.value = currentPartial
+
+            // Fake amplitude from partial result changes (orb reacts to new words)
+            if (currentPartial != lastPartial && currentPartial.isNotBlank()) {
+                _audioAmplitude.value = 0.7f
+                lastPartial = currentPartial
+            } else {
+                _audioAmplitude.value = (_audioAmplitude.value * 0.85f).coerceAtLeast(0f)
+            }
+
+            if (currentPartial.isNotBlank() && _pipelineState.value == PipelineState.LISTENING) {
+                _pipelineState.value = PipelineState.TRANSCRIBING
+            }
+
+            if (asr.isEndpoint()) {
+                processEndpoint()
+            }
+
+            delay(80)
+        }
+    }
+
+    /**
+     * Loop for Sherpa (Nemotron): feeds raw audio to the on-device model.
+     */
+    private suspend fun sherpaAsrLoop() {
         val buffer = ShortArray(audioRecordManager.bufferSize)
 
         while (scope.isActive) {
-            // Skip audio processing when muted
             if (_isMuted.value) {
                 _audioAmplitude.value = 0f
                 delay(100)
@@ -207,7 +274,6 @@ class AudioPipelineManager @Inject constructor(
 
             val samples = FloatArray(ret) { buffer[it] / 32768.0f }
 
-            // Compute audio amplitude (RMS) with exponential smoothing
             var sumSquares = 0f
             for (s in samples) sumSquares += s * s
             val rms = kotlin.math.sqrt(sumSquares / samples.size)
@@ -222,49 +288,53 @@ class AudioPipelineManager @Inject constructor(
                 continue
             }
 
-            // Check if ASR detected an endpoint (user stopped speaking)
+            // Sync partial results
+            _partialResult.value = asr.partialResult.value
+
+            if (asr.partialResult.value.isNotBlank() && _pipelineState.value == PipelineState.LISTENING) {
+                _pipelineState.value = PipelineState.TRANSCRIBING
+            }
+
             if (asr.isEndpoint()) {
-                val text = asr.getFinalResult()
-
-                if (text.isBlank()) {
-                    _pipelineState.value = PipelineState.LISTENING
-                    continue
-                }
-
-                Log.i(TAG, "Transcribed: $text")
-                val conversationId = _currentConversationId.value ?: continue
-
-                // Process the utterance
-                playTone(ToneGenerator.TONE_PROP_ACK)
-                conversationRepository.addMessage(conversationId, MessageRole.USER, text)
-
-                _pipelineState.value = PipelineState.SENDING
-                val response = sendWithEntertainment(text)
-
-                if (response != null) {
-                    conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, response)
-                    playTone(ToneGenerator.TONE_PROP_ACK)
-                    _pipelineState.value = PipelineState.SPEAKING
-                    tts.speak(response)
-                } else {
-                    conversationRepository.addMessage(
-                        conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
-                    )
-                    _pipelineState.value = PipelineState.SPEAKING
-                    speakCue("I couldn't reach the server. Please check your VPS connection in settings. I'll keep trying.")
-                }
-
-                // Back to listening — reset FIRST, then announce
-                asr.reset()
-                _pipelineState.value = PipelineState.LISTENING
-                playTone(ToneGenerator.TONE_PROP_BEEP)
-            } else if (asr.partialResult.value.isNotBlank()) {
-                // We have partial text — show we're actively transcribing
-                if (_pipelineState.value == PipelineState.LISTENING) {
-                    _pipelineState.value = PipelineState.TRANSCRIBING
-                }
+                processEndpoint()
             }
         }
+    }
+
+    private suspend fun processEndpoint() {
+        val text = asr.getFinalResult()
+
+        if (text.isBlank()) {
+            _pipelineState.value = PipelineState.LISTENING
+            return
+        }
+
+        Log.i(TAG, "Transcribed: $text")
+        val conversationId = _currentConversationId.value ?: return
+
+        playTone(ToneGenerator.TONE_PROP_ACK)
+        conversationRepository.addMessage(conversationId, MessageRole.USER, text)
+
+        _pipelineState.value = PipelineState.SENDING
+        val response = sendWithEntertainment(text)
+
+        if (response != null) {
+            conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, response)
+            playTone(ToneGenerator.TONE_PROP_ACK)
+            _pipelineState.value = PipelineState.SPEAKING
+            tts.speak(response)
+        } else {
+            conversationRepository.addMessage(
+                conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
+            )
+            _pipelineState.value = PipelineState.SPEAKING
+            speakCue("I couldn't reach the server. Please check your VPS connection in settings. I'll keep trying.")
+        }
+
+        asr.reset()
+        _partialResult.value = ""
+        _pipelineState.value = PipelineState.LISTENING
+        playTone(ToneGenerator.TONE_PROP_BEEP)
     }
 
     private suspend fun sendWithEntertainment(text: String): String? {

@@ -54,6 +54,10 @@ class VoiceBridgeForegroundService : Service() {
         pipelineManager.sendTextMessage(text)
     }
 
+    fun setAsrEngine(useAndroid: Boolean) {
+        pipelineManager.setAsrEngine(useAndroid)
+    }
+
     inner class LocalBinder : Binder() {
         val service: VoiceBridgeForegroundService
             get() = this@VoiceBridgeForegroundService

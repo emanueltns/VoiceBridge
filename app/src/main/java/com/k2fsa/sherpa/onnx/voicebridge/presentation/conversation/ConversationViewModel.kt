@@ -90,6 +90,10 @@ class ConversationViewModel @Inject constructor(
             try {
                 vpsRepository.connect(settings.host, settings.port)
 
+                // Apply ASR + voice settings BEFORE starting the pipeline
+                pipelineManager.setAsrEngine(settings.useAndroidAsr)
+                pipelineManager.setVoiceId(settings.voiceId)
+
                 val conversation = conversationRepository.getLastActiveConversationId()?.let {
                     conversationRepository.getConversation(it)
                 } ?: conversationRepository.createConversation()
@@ -102,13 +106,6 @@ class ConversationViewModel @Inject constructor(
 
                 bindToService()
                 observeMessages(conversation.id)
-
-                // Apply voice setting
-                viewModelScope.launch {
-                    // Wait briefly for service to bind
-                    kotlinx.coroutines.delay(500)
-                    service?.setVoiceId(settings.voiceId)
-                }
 
                 _state.update {
                     it.copy(

@@ -1,8 +1,9 @@
 package com.k2fsa.sherpa.onnx.voicebridge.presentation.settings
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,19 +16,27 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,63 +44,66 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
-/**
- * Kokoro multi-lang v1_0: 53 speakers
- * sid -> (name, group)
- */
-private data class Voice(val sid: Int, val name: String)
+private data class Voice(val sid: Int, val name: String, val gender: String)
 
-private data class VoiceGroup(val label: String, val voices: List<Voice>)
+private data class Language(
+    val code: String,
+    val label: String,
+    val flag: String,
+    val voices: List<Voice>,
+)
 
-private val VOICE_GROUPS = listOf(
-    VoiceGroup("American English - Female", listOf(
-        Voice(0, "Alloy"), Voice(1, "Aoede"), Voice(2, "Bella"),
-        Voice(3, "Heart"), Voice(4, "Jessica"), Voice(5, "Kore"),
-        Voice(6, "Nicole"), Voice(7, "Nova"), Voice(8, "River"),
-        Voice(9, "Sarah"), Voice(10, "Sky"),
+private val LANGUAGES = listOf(
+    Language("en-US", "American English", "\uD83C\uDDFA\uD83C\uDDF8", listOf(
+        Voice(0, "Alloy", "F"), Voice(1, "Aoede", "F"), Voice(2, "Bella", "F"),
+        Voice(3, "Heart", "F"), Voice(4, "Jessica", "F"), Voice(5, "Kore", "F"),
+        Voice(6, "Nicole", "F"), Voice(7, "Nova", "F"), Voice(8, "River", "F"),
+        Voice(9, "Sarah", "F"), Voice(10, "Sky", "F"),
+        Voice(11, "Adam", "M"), Voice(12, "Echo", "M"), Voice(13, "Eric", "M"),
+        Voice(14, "Fenrir", "M"), Voice(15, "Liam", "M"), Voice(16, "Michael", "M"),
+        Voice(17, "Onyx", "M"), Voice(18, "Puck", "M"), Voice(19, "Santa", "M"),
     )),
-    VoiceGroup("American English - Male", listOf(
-        Voice(11, "Adam"), Voice(12, "Echo"), Voice(13, "Eric"),
-        Voice(14, "Fenrir"), Voice(15, "Liam"), Voice(16, "Michael"),
-        Voice(17, "Onyx"), Voice(18, "Puck"), Voice(19, "Santa"),
+    Language("en-GB", "British English", "\uD83C\uDDEC\uD83C\uDDE7", listOf(
+        Voice(20, "Alice", "F"), Voice(21, "Emma", "F"),
+        Voice(22, "Isabella", "F"), Voice(23, "Lily", "F"),
+        Voice(24, "Daniel", "M"), Voice(25, "Fable", "M"),
+        Voice(26, "George", "M"), Voice(27, "Lewis", "M"),
     )),
-    VoiceGroup("British English - Female", listOf(
-        Voice(20, "Alice"), Voice(21, "Emma"),
-        Voice(22, "Isabella"), Voice(23, "Lily"),
+    Language("es", "Spanish", "\uD83C\uDDEA\uD83C\uDDF8", listOf(
+        Voice(28, "Dora", "F"), Voice(29, "Alex", "M"), Voice(30, "Santa", "M"),
     )),
-    VoiceGroup("British English - Male", listOf(
-        Voice(24, "Daniel"), Voice(25, "Fable"),
-        Voice(26, "George"), Voice(27, "Lewis"),
+    Language("fr", "French", "\uD83C\uDDEB\uD83C\uDDF7", listOf(
+        Voice(31, "Siwis", "F"),
     )),
-    VoiceGroup("Spanish", listOf(
-        Voice(28, "Dora"), Voice(29, "Alex"), Voice(30, "Santa"),
+    Language("hi", "Hindi", "\uD83C\uDDEE\uD83C\uDDF3", listOf(
+        Voice(32, "Alpha", "F"), Voice(33, "Beta", "F"),
+        Voice(34, "Omega", "M"), Voice(35, "Psi", "M"),
     )),
-    VoiceGroup("French", listOf(
-        Voice(31, "Siwis"),
+    Language("it", "Italian", "\uD83C\uDDEE\uD83C\uDDF9", listOf(
+        Voice(36, "Sara", "F"), Voice(37, "Nicola", "M"),
     )),
-    VoiceGroup("Hindi", listOf(
-        Voice(32, "Alpha"), Voice(33, "Beta"),
-        Voice(34, "Omega"), Voice(35, "Psi"),
+    Language("ja", "Japanese", "\uD83C\uDDEF\uD83C\uDDF5", listOf(
+        Voice(38, "Alpha", "F"), Voice(39, "Gongitsune", "F"),
+        Voice(40, "Nezumi", "F"), Voice(41, "Tebukuro", "F"), Voice(42, "Kumo", "M"),
     )),
-    VoiceGroup("Italian", listOf(
-        Voice(36, "Sara"), Voice(37, "Nicola"),
+    Language("pt", "Portuguese", "\uD83C\uDDE7\uD83C\uDDF7", listOf(
+        Voice(43, "Dora", "F"), Voice(44, "Alex", "M"), Voice(45, "Santa", "M"),
     )),
-    VoiceGroup("Japanese", listOf(
-        Voice(38, "Alpha"), Voice(39, "Gongitsune"),
-        Voice(40, "Nezumi"), Voice(41, "Tebukuro"), Voice(42, "Kumo"),
-    )),
-    VoiceGroup("Portuguese", listOf(
-        Voice(43, "Dora"), Voice(44, "Alex"), Voice(45, "Santa"),
-    )),
-    VoiceGroup("Chinese (Mandarin)", listOf(
-        Voice(46, "Xiaobei"), Voice(47, "Xiaoni"),
-        Voice(48, "Xiaoxiao"), Voice(49, "Xiaoyi"),
-        Voice(50, "Yunjian"), Voice(51, "Yunxi"),
-        Voice(52, "Yunyang"),
+    Language("zh", "Chinese", "\uD83C\uDDE8\uD83C\uDDF3", listOf(
+        Voice(46, "Xiaobei", "F"), Voice(47, "Xiaoni", "F"),
+        Voice(48, "Xiaoxiao", "F"), Voice(49, "Xiaoyi", "F"),
+        Voice(50, "Yunjian", "M"), Voice(51, "Yunxi", "M"),
+        Voice(52, "Yunyang", "M"),
     )),
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Find which language a voice sid belongs to */
+private fun findLanguageForSid(sid: Int): Language {
+    return LANGUAGES.firstOrNull { lang -> lang.voices.any { it.sid == sid } }
+        ?: LANGUAGES.first()
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsBottomSheet(
     viewModel: SettingsViewModel,
@@ -99,6 +111,12 @@ fun SettingsBottomSheet(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Track selected language (auto-detect from current voice)
+    var selectedLanguage by remember(state.voiceId) {
+        mutableStateOf(findLanguageForSid(state.voiceId))
+    }
+    var languageDropdownExpanded by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -112,6 +130,7 @@ fun SettingsBottomSheet(
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState()),
         ) {
+            // Header + save checkmark
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -135,11 +154,8 @@ fun SettingsBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // VPS Connection
-            Text(
-                text = "VPS Connection",
-                style = MaterialTheme.typography.titleLarge,
-            )
+            // ── VPS Connection ──
+            Text("VPS Connection", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -163,48 +179,137 @@ fun SettingsBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Voice selection
-            Text(
-                text = "Voice",
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "53 speakers, 9 languages",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // ── Speech Recognition ──
+            Text("Speech Recognition", style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (state.useAndroidAsr) "Android (Google)" else "On-device (Nemotron)",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = if (state.useAndroidAsr)
+                            "Best accuracy, great with accents"
+                        else
+                            "Private, works offline, cross-platform",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = state.useAndroidAsr,
+                    onCheckedChange = { viewModel.onAsrEngineChanged(it) },
+                )
+            }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Voice ──
+            Text("Voice", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
 
-            for (group in VOICE_GROUPS) {
+            // Language dropdown
+            Text(
+                text = "Language",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            OutlinedButton(
+                onClick = { languageDropdownExpanded = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
                 Text(
-                    text = group.label,
+                    text = "${selectedLanguage.flag}  ${selectedLanguage.label}",
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
+            }
+
+            DropdownMenu(
+                expanded = languageDropdownExpanded,
+                onDismissRequest = { languageDropdownExpanded = false },
+            ) {
+                for (lang in LANGUAGES) {
+                    DropdownMenuItem(
+                        text = {
+                            Text("${lang.flag}  ${lang.label}  (${lang.voices.size} voices)")
+                        },
+                        onClick = {
+                            selectedLanguage = lang
+                            languageDropdownExpanded = false
+                            // Auto-select first voice of this language if current isn't in it
+                            if (lang.voices.none { it.sid == state.voiceId }) {
+                                viewModel.onVoiceIdChanged(lang.voices.first().sid)
+                            }
+                        },
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Voices for selected language
+            val femaleVoices = selectedLanguage.voices.filter { it.gender == "F" }
+            val maleVoices = selectedLanguage.voices.filter { it.gender == "M" }
+
+            if (femaleVoices.isNotEmpty()) {
+                Text(
+                    text = "Female",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    for (voice in group.voices) {
+                    for (voice in femaleVoices) {
                         FilterChip(
                             selected = state.voiceId == voice.sid,
                             onClick = { viewModel.onVoiceIdChanged(voice.sid) },
-                            label = { Text(voice.name, fontSize = 12.sp) },
+                            label = { Text(voice.name, fontSize = 13.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                             ),
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            if (maleVoices.isNotEmpty()) {
+                Text(
+                    text = "Male",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    for (voice in maleVoices) {
+                        FilterChip(
+                            selected = state.voiceId == voice.sid,
+                            onClick = { viewModel.onVoiceIdChanged(voice.sid) },
+                            label = { Text(voice.name, fontSize = 13.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            ),
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {

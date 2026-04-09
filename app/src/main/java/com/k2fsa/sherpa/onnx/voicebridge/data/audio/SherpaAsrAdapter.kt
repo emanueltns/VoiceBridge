@@ -45,13 +45,8 @@ class SherpaAsrAdapter @Inject constructor(
                 provider = "cpu",
             ),
             endpointConfig = EndpointConfig(
-                // Rule 1: long silence without any speech — reset
                 rule1 = EndpointRule(false, 3.0f, 0.0f),
-                // Rule 2: silence after speech — the main trigger
-                // 2.4s lets you pause to think, breathe, gather thoughts
-                // without getting cut off mid-sentence
                 rule2 = EndpointRule(true, 2.4f, 0.0f),
-                // Rule 3: max utterance — 90s for long explanations
                 rule3 = EndpointRule(false, 0.0f, 90.0f),
             ),
             enableEndpoint = true,

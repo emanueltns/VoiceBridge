@@ -15,8 +15,10 @@ import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.SettingsRepository
 import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.VpsRepository
 import com.k2fsa.sherpa.onnx.voicebridge.domain.service.SpeechRecognitionService
 import com.k2fsa.sherpa.onnx.voicebridge.domain.service.TextToSpeechService
+import com.k2fsa.sherpa.onnx.voicebridge.data.audio.AndroidAsrAdapter
 import com.k2fsa.sherpa.onnx.voicebridge.data.audio.SherpaAsrAdapter
 import com.k2fsa.sherpa.onnx.voicebridge.data.audio.SherpaTtsAdapter
+import javax.inject.Named
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -71,7 +73,13 @@ abstract class BindingsModule {
 
     @Binds
     @Singleton
-    abstract fun bindSpeechRecognition(impl: SherpaAsrAdapter): SpeechRecognitionService
+    @Named("sherpa")
+    abstract fun bindSherpaAsr(impl: SherpaAsrAdapter): SpeechRecognitionService
+
+    @Binds
+    @Singleton
+    @Named("android")
+    abstract fun bindAndroidAsr(impl: AndroidAsrAdapter): SpeechRecognitionService
 
     @Binds
     @Singleton
