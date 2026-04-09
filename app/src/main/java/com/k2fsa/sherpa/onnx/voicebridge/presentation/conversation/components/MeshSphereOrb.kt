@@ -1,6 +1,5 @@
 package com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation.components
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -21,25 +20,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.k2fsa.sherpa.onnx.voicebridge.domain.model.PipelineState
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
-
-// State colors for the mesh
-private val ColorIdle = Color(0xFF555577)        // Dim silver
-private val ColorInitializing = Color(0xFF5C6BC0) // Indigo
-private val ColorListening = Color(0xFF00FF41)    // Matrix green
-private val ColorTranscribing = Color(0xFF40C4FF) // Cyan-blue
-private val ColorSending = Color(0xFFFFAB40)      // Amber
-private val ColorSpeaking = Color(0xFF7C4DFF)     // Purple
-private val ColorEntertaining = Color(0xFFE040FB) // Magenta
+import kotlin.math.sqrt
 
 /**
- * A flowing 3D particle-mesh sphere inspired by the reference design.
- *
- * Dense dots arranged on a sphere, displaced by layered sine waves
- * to create an organic, flowing blob effect. Dots glow based on depth.
- * Very thin lines connect neighbors for the wireframe feel.
- * The whole thing rotates and breathes.
+ * Dense wireframe mesh sphere with organic blob displacement,
+ * purple palette, and rim-light glow — matching the Maia reference.
  */
 @Composable
 fun MeshSphereOrb(
@@ -48,45 +37,47 @@ fun MeshSphereOrb(
     modifier: Modifier = Modifier,
     size: Dp = 260.dp,
 ) {
-    // Dense mesh: 20 lat x 30 lon = 600+ particles
-    val latSegs = 20
-    val lonSegs = 30
+    val latSegs = 28
+    val lonSegs = 40
+    val cols = lonSegs + 1
 
-    // Pre-compute base sphere points (unit sphere)
+    // Pre-compute unit sphere vertices and edge indices
     val mesh = remember(latSegs, lonSegs) {
-        val verts = mutableListOf<FloatArray>() // [x, y, z] unit sphere
-        val edgesH = mutableListOf<IntArray>()  // horizontal edges
-        val edgesV = mutableListOf<IntArray>()  // vertical edges
-        val cols = lonSegs + 1
+        val verts = FloatArray((latSegs + 1) * cols * 3)
+        val edgesH = mutableListOf<Int>() // pairs: i0, i1
+        val edgesV = mutableListOf<Int>()
 
         for (lat in 0..latSegs) {
-            val theta = Math.PI.toFloat() * lat / latSegs
-            val sinT = sin(theta)
-            val cosT = cos(theta)
+            val theta = PI.toFloat() * lat / latSegs
+            val sinT = sin(theta); val cosT = cos(theta)
             for (lon in 0..lonSegs) {
-                val phi = 2f * Math.PI.toFloat() * lon / lonSegs
-                verts.add(floatArrayOf(sinT * cos(phi), cosT, sinT * sin(phi)))
+                val phi = 2f * PI.toFloat() * lon / lonSegs
+                val idx = (lat * cols + lon) * 3
+                verts[idx] = sinT * cos(phi)
+                verts[idx + 1] = cosT
+                verts[idx + 2] = sinT * sin(phi)
             }
         }
         for (lat in 0..latSegs) {
             for (lon in 0..lonSegs) {
                 val i = lat * cols + lon
-                if (lon < lonSegs) edgesH.add(intArrayOf(i, i + 1))
-                if (lat < latSegs) edgesV.add(intArrayOf(i, i + cols))
+                if (lon < lonSegs) { edgesH.add(i); edgesH.add(i + 1) }
+                if (lat < latSegs) { edgesV.add(i); edgesV.add(i + cols) }
             }
         }
-        Triple(verts, edgesH, edgesV)
+        Triple(verts, edgesH.toIntArray(), edgesV.toIntArray())
     }
 
     val (baseVerts, edgesH, edgesV) = mesh
-    val infiniteTransition = rememberInfiniteTransition(label = "mesh")
+    val vertCount = (latSegs + 1) * cols
+    val infiniteTransition = rememberInfiniteTransition(label = "orb")
 
-    // Time drives the flowing wave displacement
+    // Time
     val time by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 1000f,
+        targetValue = 100000f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1_000_000, easing = LinearEasing),
+            animation = tween(100_000_000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "time",
@@ -95,15 +86,15 @@ fun MeshSphereOrb(
     // Y rotation
     val rotY by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 6.2832f,
+        targetValue = 2f * PI.toFloat(),
         animationSpec = infiniteRepeatable(
             animation = tween(
                 durationMillis = when (pipelineState) {
-                    PipelineState.IDLE -> 24000
-                    PipelineState.INITIALIZING -> 8000
-                    PipelineState.LISTENING, PipelineState.TRANSCRIBING -> 10000
-                    PipelineState.SENDING -> 14000
-                    PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 6000
+                    PipelineState.IDLE -> 25000
+                    PipelineState.INITIALIZING -> 12000
+                    PipelineState.LISTENING, PipelineState.TRANSCRIBING -> 14000
+                    PipelineState.SENDING -> 16000
+                    PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 8000
                 },
                 easing = LinearEasing,
             ),
@@ -112,12 +103,12 @@ fun MeshSphereOrb(
         label = "rotY",
     )
 
-    // Gentle X tilt for 3D depth
+    // X tilt
     val rotX by infiniteTransition.animateFloat(
-        initialValue = -0.25f,
-        targetValue = 0.25f,
+        initialValue = -0.3f,
+        targetValue = 0.3f,
         animationSpec = infiniteRepeatable(
-            animation = tween(15000, easing = LinearEasing),
+            animation = tween(20000, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "rotX",
@@ -131,8 +122,8 @@ fun MeshSphereOrb(
             animation = tween(
                 durationMillis = when (pipelineState) {
                     PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 500
-                    PipelineState.LISTENING -> 1000
-                    else -> 2500
+                    PipelineState.LISTENING -> 900
+                    else -> 2200
                 },
             ),
             repeatMode = RepeatMode.Reverse,
@@ -140,173 +131,261 @@ fun MeshSphereOrb(
         label = "glow",
     )
 
-    // Displacement intensity (animated, audio-reactive)
+    // Displacement amplitude
     val displacement by animateFloatAsState(
         targetValue = when (pipelineState) {
-            PipelineState.IDLE -> 0.02f
-            PipelineState.INITIALIZING -> 0.06f
-            PipelineState.LISTENING, PipelineState.TRANSCRIBING ->
-                0.10f + audioAmplitude * 0.30f
-            PipelineState.SENDING -> 0.08f
-            PipelineState.SPEAKING, PipelineState.ENTERTAINING ->
-                0.12f + audioAmplitude * 0.25f
+            PipelineState.IDLE -> 0.05f
+            PipelineState.INITIALIZING -> 0.10f
+            PipelineState.LISTENING -> 0.16f + audioAmplitude * 0.40f
+            PipelineState.TRANSCRIBING -> 0.18f + audioAmplitude * 0.25f
+            PipelineState.SENDING -> 0.12f
+            PipelineState.SPEAKING -> 0.20f + audioAmplitude * 0.35f
+            PipelineState.ENTERTAINING -> 0.25f + audioAmplitude * 0.30f
         },
-        animationSpec = spring(dampingRatio = 0.5f),
+        animationSpec = spring(dampingRatio = 0.45f),
         label = "disp",
     )
 
-    // Animated state color
-    val meshColor by animateColorAsState(
+    // Flow speed
+    val flowSpeed by animateFloatAsState(
         targetValue = when (pipelineState) {
-            PipelineState.IDLE -> ColorIdle
-            PipelineState.INITIALIZING -> ColorInitializing
-            PipelineState.LISTENING -> ColorListening
-            PipelineState.TRANSCRIBING -> ColorTranscribing
-            PipelineState.SENDING -> ColorSending
-            PipelineState.SPEAKING -> ColorSpeaking
-            PipelineState.ENTERTAINING -> ColorEntertaining
+            PipelineState.IDLE -> 0.3f
+            PipelineState.INITIALIZING -> 0.6f
+            PipelineState.LISTENING -> 0.8f
+            PipelineState.TRANSCRIBING -> 1.0f
+            PipelineState.SENDING -> 1.1f
+            PipelineState.SPEAKING -> 1.0f + audioAmplitude * 0.4f
+            PipelineState.ENTERTAINING -> 1.4f
         },
-        animationSpec = tween(600),
-        label = "meshColor",
+        animationSpec = spring(dampingRatio = 0.6f),
+        label = "speed",
     )
 
-    // Overall brightness
-    val brightness = when (pipelineState) {
-        PipelineState.IDLE -> 0.40f
-        PipelineState.INITIALIZING -> 0.50f
-        PipelineState.LISTENING, PipelineState.TRANSCRIBING -> 0.70f
-        PipelineState.SENDING -> 0.55f
-        PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 0.85f
+    // State-dependent color (green variations)
+    val meshHue by animateFloatAsState(
+        targetValue = when (pipelineState) {
+            PipelineState.IDLE -> 140f
+            PipelineState.INITIALIZING -> 135f
+            PipelineState.LISTENING -> 130f
+            PipelineState.TRANSCRIBING -> 160f
+            PipelineState.SENDING -> 100f
+            PipelineState.SPEAKING -> 145f
+            PipelineState.ENTERTAINING -> 120f
+        },
+        animationSpec = tween(600),
+        label = "hue",
+    )
+
+    val meshSaturation = when (pipelineState) {
+        PipelineState.IDLE -> 0.30f
+        PipelineState.INITIALIZING -> 0.60f
+        else -> 0.75f
+    }
+
+    val overallBrightness = when (pipelineState) {
+        PipelineState.IDLE -> 0.45f
+        PipelineState.INITIALIZING -> 0.65f
+        PipelineState.LISTENING, PipelineState.TRANSCRIBING -> 0.90f
+        PipelineState.SENDING -> 0.75f
+        PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 1.0f
     }
 
     val glowIntensity = when (pipelineState) {
-        PipelineState.IDLE -> 0.06f
-        PipelineState.LISTENING, PipelineState.TRANSCRIBING -> 0.14f
-        PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 0.22f
-        else -> 0.08f
+        PipelineState.IDLE -> 0.08f
+        PipelineState.LISTENING, PipelineState.TRANSCRIBING -> 0.20f
+        PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 0.30f
+        else -> 0.12f
     } * glowPulse
 
     Canvas(modifier = modifier.size(size)) {
         val cx = this.size.width / 2f
         val cy = this.size.height / 2f
-        val radius = this.size.minDimension * 0.36f
-        val fov = 3.2f
+        val radius = this.size.minDimension * 0.37f
+        val fov = 3.5f
 
-        // Glow layers (soft radial behind the sphere)
+        val cosRY = cos(rotY); val sinRY = sin(rotY)
+        val cosRX = cos(rotX); val sinRX = sin(rotX)
+
+        // Glow color from current hue
+        val glowColor = Color.hsl(meshHue, meshSaturation.coerceAtLeast(0.4f), 0.45f)
+
+        // ── Background glow layers ──
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    meshColor.copy(alpha = glowIntensity * 0.6f),
-                    meshColor.copy(alpha = glowIntensity * 0.2f),
+                    glowColor.copy(alpha = glowIntensity * 0.35f),
+                    glowColor.copy(alpha = glowIntensity * 0.08f),
                     Color.Transparent,
                 ),
                 center = Offset(cx, cy),
-                radius = radius * 2.0f,
+                radius = radius * 2.8f,
             ),
-            radius = radius * 2.0f,
+            radius = radius * 2.8f,
             center = Offset(cx, cy),
         )
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    meshColor.copy(alpha = glowIntensity),
-                    meshColor.copy(alpha = glowIntensity * 0.3f),
+                    glowColor.copy(alpha = glowIntensity * 0.7f),
+                    glowColor.copy(alpha = glowIntensity * 0.15f),
                     Color.Transparent,
                 ),
                 center = Offset(cx, cy),
-                radius = radius * 1.3f,
+                radius = radius * 1.5f,
             ),
-            radius = radius * 1.3f,
+            radius = radius * 1.5f,
+            center = Offset(cx, cy),
+        )
+        // Inner core glow
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = glowIntensity * 0.15f),
+                    glowColor.copy(alpha = glowIntensity * 0.25f),
+                    Color.Transparent,
+                ),
+                center = Offset(cx, cy),
+                radius = radius * 0.6f,
+            ),
+            radius = radius * 0.6f,
             center = Offset(cx, cy),
         )
 
-        // Transform all vertices: displace -> rotate -> project
-        val t = time * 0.06f
-        val projected = FloatArray(baseVerts.size * 3) // x, y, depth per vert
-        for (i in baseVerts.indices) {
-            val bv = baseVerts[i]
-            val bx = bv[0]; val by = bv[1]; val bz = bv[2]
+        // ── Transform all vertices ──
+        val t = time * flowSpeed * 0.06f
+        // projected: x, y, z (depth), rim factor per vertex
+        val proj = FloatArray(vertCount * 4)
 
-            // Layered sine-wave displacement (the "flowing" effect)
-            val wave1 = sin(bx * 3f + t * 0.7f) * cos(by * 2.5f + t * 0.5f) * 0.5f
-            val wave2 = sin(by * 4f + t * 0.9f + bz * 2f) * 0.3f
-            val wave3 = cos(bz * 3.5f + t * 0.6f + bx * 1.5f) * 0.2f
-            val d = 1f + (wave1 + wave2 + wave3) * displacement
+        for (i in 0 until vertCount) {
+            val bi = i * 3
+            val bx = baseVerts[bi]; val by = baseVerts[bi + 1]; val bz = baseVerts[bi + 2]
 
-            val dx = bx * d
-            val dy = by * d
-            val dz = bz * d
+            // Multi-frequency sine displacement for organic blob
+            val w1 = sin(bx * 3f + t * 0.7f) * cos(by * 2.5f + t * 0.5f)
+            val w2 = sin(by * 4f + t * 0.85f + bz * 2f) * 0.6f
+            val w3 = cos(bz * 3.5f + t * 0.55f + bx * 1.5f) * 0.4f
+            val w4 = sin((bx + by) * 5f + t * 1.1f) * 0.3f
+            val w5 = cos((bz - bx) * 6f + t * 0.75f) * 0.2f
+            val d = 1f + (w1 + w2 + w3 + w4 + w5) * displacement
+
+            val dx = bx * d; val dy = by * d; val dz = bz * d
 
             // Rotate Y
-            val cosY = cos(rotY); val sinY = sin(rotY)
-            val rx = dx * cosY + dz * sinY
+            val rx = dx * cosRY + dz * sinRY
             val ry = dy
-            val rz = -dx * sinY + dz * cosY
+            val rz = -dx * sinRY + dz * cosRY
 
             // Rotate X
-            val cosX = cos(rotX); val sinX = sin(rotX)
             val fx = rx
-            val fy = ry * cosX - rz * sinX
-            val fz = ry * sinX + rz * cosX
+            val fy = ry * cosRX - rz * sinRX
+            val fz = ry * sinRX + rz * cosRX
 
-            // Perspective project
+            // Perspective
             val zz = fz + fov
-            val scale = fov / zz.coerceAtLeast(0.2f)
-            projected[i * 3] = fx * scale
-            projected[i * 3 + 1] = fy * scale
-            projected[i * 3 + 2] = fz  // depth
+            val scale = fov / zz.coerceAtLeast(0.3f)
+
+            val pi = i * 4
+            proj[pi] = fx * scale       // screen x (normalized)
+            proj[pi + 1] = fy * scale   // screen y
+            proj[pi + 2] = fz           // depth
+
+            // Rim factor: how much this point is on the silhouette edge
+            // On a sphere, normal ≈ position. View dir = (0,0,1).
+            // Rim = 1 when normal perpendicular to view (edge), 0 when facing camera
+            val len = sqrt(fx * fx + fy * fy + fz * fz).coerceAtLeast(0.001f)
+            val nz = fz / len
+            proj[pi + 3] = 1f - abs(nz) // rim: 0=facing, 1=edge
         }
 
-        // Draw wireframe lines (very thin, subtle)
-        fun drawEdges(edges: List<IntArray>, alphaMultiplier: Float) {
-            for (e in edges) {
-                val ai = e[0] * 3; val bi = e[1] * 3
-                val ax = projected[ai]; val ay = projected[ai + 1]; val az = projected[ai + 2]
-                val bx = projected[bi]; val by = projected[bi + 1]; val bz = projected[bi + 2]
+        // ── Draw wireframe edges ──
+        fun drawEdgeSet(edges: IntArray, baseAlpha: Float) {
+            var e = 0
+            while (e < edges.size) {
+                val ai = edges[e] * 4; val bi = edges[e + 1] * 4
+                e += 2
 
-                // Skip seam wrapping artifacts
+                val ax = proj[ai]; val ay = proj[ai + 1]; val az = proj[ai + 2]; val aRim = proj[ai + 3]
+                val bx = proj[bi]; val by = proj[bi + 1]; val bz = proj[bi + 2]; val bRim = proj[bi + 3]
+
+                // Skip wrap-around seam artifacts
                 val ddx = ax - bx; val ddy = ay - by
-                if (ddx * ddx + ddy * ddy > 0.5f) return@drawEdges
+                if (ddx * ddx + ddy * ddy > 0.25f) continue
 
-                val avgDepth = (az + bz) / 2f
-                val depthFade = ((avgDepth + 1f) / 2f).coerceIn(0f, 1f)
-                val alpha = brightness * alphaMultiplier * (0.05f + depthFade * 0.95f)
-                if (alpha < 0.01f) return@drawEdges
+                val avgDepth = ((az + bz) / 2f + 1.5f) / 3f
+                val depthFade = avgDepth.coerceIn(0f, 1f)
+                val avgRim = (aRim + bRim) / 2f
+
+                // Rim-light: edges on the silhouette are brightest
+                val rimBoost = 0.5f + avgRim * 0.5f
+                val alpha = baseAlpha * (0.20f + depthFade * 0.80f) * rimBoost * overallBrightness
+                if (alpha < 0.008f) continue
+
+                // Hue shifts slightly along the surface
+                val hueShift = (avgRim * 15f - 5f)
+                val lineColor = Color.hsl(
+                    hue = (meshHue + hueShift).coerceIn(0f, 360f),
+                    saturation = meshSaturation + avgRim * 0.2f,
+                    lightness = (0.4f + avgRim * 0.35f + depthFade * 0.15f).coerceIn(0.1f, 0.9f),
+                )
 
                 drawLine(
-                    color = meshColor.copy(alpha = alpha),
+                    color = lineColor.copy(alpha = alpha.coerceIn(0f, 1f)),
                     start = Offset(cx + ax * radius, cy + ay * radius),
                     end = Offset(cx + bx * radius, cy + by * radius),
-                    strokeWidth = 0.6f,
+                    strokeWidth = 0.5f + avgRim * 0.6f, // thicker on rim
                 )
             }
         }
-        drawEdges(edgesH, 0.18f)
-        drawEdges(edgesV, 0.12f)
 
-        // Draw particles (dots) — the main visual
-        for (i in baseVerts.indices) {
-            val px = projected[i * 3]
-            val py = projected[i * 3 + 1]
-            val pz = projected[i * 3 + 2]
+        drawEdgeSet(edgesH, 0.50f)
+        drawEdgeSet(edgesV, 0.38f)
 
-            val depthFade = ((pz + 1f) / 2f).coerceIn(0f, 1f) // 0=back, 1=front
-            val dotAlpha = brightness * (0.10f + depthFade * 0.90f)
-            val dotRadius = 1.0f + depthFade * 2.2f // bigger in front
+        // ── Draw vertex dots ──
+        for (i in 0 until vertCount) {
+            val pi = i * 4
+            val px = proj[pi]; val py = proj[pi + 1]; val pz = proj[pi + 2]; val rim = proj[pi + 3]
+
+            val depthFade = ((pz + 1.5f) / 3f).coerceIn(0f, 1f)
+            val rimBoost = 0.5f + rim * 0.5f
+
+            val dotAlpha = (0.20f + depthFade * 0.80f) * rimBoost * overallBrightness
+            if (dotAlpha < 0.01f) continue
+
+            val hueShift = rim * 15f - 5f
+            val dotColor = Color.hsl(
+                hue = (meshHue + hueShift).coerceIn(0f, 360f),
+                saturation = (meshSaturation + rim * 0.25f).coerceIn(0f, 1f),
+                lightness = (0.45f + rim * 0.35f + depthFade * 0.1f).coerceIn(0.1f, 0.95f),
+            )
+
+            val dotR = 0.6f + depthFade * 1.2f + rim * 1.0f
+            val screenX = cx + px * radius
+            val screenY = cy + py * radius
 
             // Main dot
             drawCircle(
-                color = meshColor.copy(alpha = dotAlpha),
-                radius = dotRadius,
-                center = Offset(cx + px * radius, cy + py * radius),
+                color = dotColor.copy(alpha = dotAlpha.coerceIn(0f, 1f)),
+                radius = dotR,
+                center = Offset(screenX, screenY),
             )
 
-            // Soft glow halo on front-facing particles
-            if (depthFade > 0.5f) {
+            // Glow halo on rim-facing and front dots
+            if (rim > 0.5f && depthFade > 0.3f) {
+                val haloStrength = (rim - 0.5f) * 2f * depthFade
                 drawCircle(
-                    color = meshColor.copy(alpha = dotAlpha * 0.15f),
-                    radius = dotRadius * 3f,
-                    center = Offset(cx + px * radius, cy + py * radius),
+                    color = dotColor.copy(alpha = (haloStrength * 0.12f * overallBrightness).coerceIn(0f, 1f)),
+                    radius = dotR * 5f,
+                    center = Offset(screenX, screenY),
+                )
+            }
+
+            // Bright white sparkle on the strongest rim points
+            if (rim > 0.75f && depthFade > 0.5f) {
+                val sparkle = (rim - 0.75f) * 4f * depthFade
+                drawCircle(
+                    color = Color.White.copy(alpha = (sparkle * 0.20f * overallBrightness).coerceIn(0f, 1f)),
+                    radius = dotR * 0.6f,
+                    center = Offset(screenX, screenY),
                 )
             }
         }
