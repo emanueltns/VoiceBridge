@@ -24,6 +24,7 @@ class VoiceBridgeForegroundService : Service() {
 
     @Inject lateinit var pipelineManager: AudioPipelineManager
     @Inject lateinit var notificationHelper: NotificationHelper
+    @Inject lateinit var orbOverlay: OrbOverlayManager
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -61,6 +62,9 @@ class VoiceBridgeForegroundService : Service() {
         pipelineManager.setAsrEngine(useAndroid)
     }
 
+    fun showOverlay() = orbOverlay.show()
+    fun hideOverlay() = orbOverlay.hide()
+
     inner class LocalBinder : Binder() {
         val service: VoiceBridgeForegroundService
             get() = this@VoiceBridgeForegroundService
@@ -97,6 +101,8 @@ class VoiceBridgeForegroundService : Service() {
             startForeground(NotificationHelper.NOTIFICATION_ID, notification)
         }
 
+        orbOverlay.bindFlows(pipelineManager.pipelineState, pipelineManager.audioAmplitude)
+
         serviceScope.launch(Dispatchers.IO) {
             // initialize() is idempotent -- skips if already ready
             pipelineManager.initialize()
@@ -114,6 +120,7 @@ class VoiceBridgeForegroundService : Service() {
     }
 
     private fun handleStop() {
+        orbOverlay.hide()
         pipelineManager.stop()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -121,6 +128,7 @@ class VoiceBridgeForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        orbOverlay.hide()
         // Don't release pipeline -- it's a singleton, stays warm for next call
         pipelineManager.stop()
         serviceScope.cancel()

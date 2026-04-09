@@ -213,8 +213,35 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // Overlay
+            SectionHeader("# Display")
+            Spacer(modifier = Modifier.height(8.dp))
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val overlayEnabled = android.provider.Settings.canDrawOverlays(context)
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (overlayEnabled) "overlay=true" else "overlay=false",
+                        fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextPrimary,
+                    )
+                    Text("# Show orb over other apps", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TerminalDim)
+                }
+                Switch(
+                    checked = overlayEnabled,
+                    onCheckedChange = {
+                        val intent = android.content.Intent(
+                            android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            android.net.Uri.parse("package:${context.packageName}"),
+                        )
+                        context.startActivity(intent)
+                    },
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
             // Voice
-            SectionHeader("# Voice (Kokoro v1.0, 53 speakers)")
+            SectionHeader("# Voice")
             Spacer(modifier = Modifier.height(8.dp))
 
             Text("language=", fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = TerminalDim)
