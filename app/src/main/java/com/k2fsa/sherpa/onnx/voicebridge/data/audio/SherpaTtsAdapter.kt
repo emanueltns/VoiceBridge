@@ -72,7 +72,6 @@ class SherpaTtsAdapter @Inject constructor(
         val t = tts ?: return
         val track = audioTrack ?: return
 
-        // Prevent concurrent native TTS calls which cause SIGSEGV
         synchronized(speakLock) {
             shouldStop = false
             _isSpeaking.value = true
@@ -82,34 +81,70 @@ class SherpaTtsAdapter @Inject constructor(
                     track.play()
                 }
 
-                // Split into sentences and generate back-to-back
-                // so AudioTrack stays playing without gaps
                 val sentences = splitSentences(text)
-                for (sentence in sentences) {
-                    if (shouldStop) break
-                    if (sentence.isBlank()) continue
+                if (sentences.isEmpty()) return
 
-                    t.generateWithConfigAndCallback(
-                        text = sentence,
-                        config = GenerationConfig(sid = currentSid, speed = 1.0f),
-                        callback = { samples ->
-                            if (!shouldStop) {
-                                track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-                                1
-                            } else {
-                                0
-                            }
-                        },
-                    )
+                // Pre-generate first chunk
+                var nextAudio = generateChunk(t, sentences[0])
+
+                for (i in sentences.indices) {
+                    if (shouldStop) break
+
+                    val currentAudio = nextAudio ?: continue
+
+                    // Start generating NEXT chunk in background while current plays
+                    val nextSentence = sentences.getOrNull(i + 1)
+                    var futureAudio: FloatArray? = null
+                    val genThread = if (nextSentence != null && !shouldStop) {
+                        Thread {
+                            futureAudio = generateChunk(t, nextSentence)
+                        }.also { it.start() }
+                    } else null
+
+                    // Play current chunk (blocks until audio is written)
+                    writeAudio(track, currentAudio)
+
+                    // Wait for next chunk generation to finish
+                    genThread?.join()
+                    nextAudio = futureAudio
                 }
 
-                // Brief pause for audio to finish draining
                 Thread.sleep(150)
             } catch (e: Exception) {
                 android.util.Log.e("SherpaTts", "TTS speak error: ${e.message}", e)
             } finally {
                 _isSpeaking.value = false
             }
+        }
+    }
+
+    /**
+     * Generate audio samples for a text chunk (blocking).
+     */
+    private fun generateChunk(t: OfflineTts, text: String): FloatArray? {
+        if (shouldStop || text.isBlank()) return null
+        return try {
+            val result = t.generateWithConfig(
+                text = text,
+                config = GenerationConfig(sid = currentSid, speed = 1.0f),
+            )
+            result.samples
+        } catch (e: Exception) {
+            android.util.Log.e("SherpaTts", "Generate error: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Write pre-generated audio samples to AudioTrack.
+     */
+    private fun writeAudio(track: AudioTrack, samples: FloatArray) {
+        var offset = 0
+        val chunkSize = 4096
+        while (offset < samples.size && !shouldStop) {
+            val len = minOf(chunkSize, samples.size - offset)
+            track.write(samples, offset, len, AudioTrack.WRITE_BLOCKING)
+            offset += len
         }
     }
 

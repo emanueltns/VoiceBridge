@@ -38,6 +38,7 @@ class ConversationViewModel @Inject constructor(
 
     private var serviceBound = false
     private var service: VoiceBridgeForegroundService? = null
+    private val pendingTextMessages = mutableListOf<String>()
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -45,6 +46,11 @@ class ConversationViewModel @Inject constructor(
             service = localBinder.service
             serviceBound = true
             observeService()
+            // Flush any text messages that arrived before the service was bound
+            for (msg in pendingTextMessages) {
+                service?.sendTextMessage(msg)
+            }
+            pendingTextMessages.clear()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -142,7 +148,12 @@ class ConversationViewModel @Inject constructor(
 
     private fun sendTextMessage(text: String) {
         if (text.isBlank()) return
-        service?.sendTextMessage(text)
+        val svc = service
+        if (svc != null) {
+            svc.sendTextMessage(text)
+        } else {
+            pendingTextMessages.add(text)
+        }
     }
 
     private fun toggleMute() {

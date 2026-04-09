@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.k2fsa.sherpa.onnx.voicebridge.domain.model.ConnectionSettings
 import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.SettingsRepository
+import com.k2fsa.sherpa.onnx.voicebridge.service.AudioPipelineManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,7 @@ data class SettingsUiState(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    private val pipelineManager: AudioPipelineManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsUiState())
@@ -61,6 +63,12 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.saveSettings(
                 ConnectionSettings(s.host, port, s.voiceId, s.useAndroidAsr, s.funFactsEnabled, s.userName),
             )
+
+            // Apply to running pipeline immediately
+            pipelineManager.funFactsEnabled = s.funFactsEnabled
+            pipelineManager.setVoiceId(s.voiceId)
+            pipelineManager.setAsrEngine(s.useAndroidAsr)
+
             _state.update { it.copy(saved = true) }
         }
     }

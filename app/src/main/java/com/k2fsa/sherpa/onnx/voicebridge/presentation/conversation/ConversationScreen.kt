@@ -296,7 +296,7 @@ fun ConversationScreen(
                         cursorColor = CallGreen,
                     ),
                     textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
-                    singleLine = true,
+                    maxLines = 5,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 if (inputText.isNotBlank()) {

@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Named
@@ -79,6 +81,9 @@ class AudioPipelineManager @Inject constructor(
 
     private var pipelineJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Guards VPS sends — only one of processEndpoint / sendTextMessage may run at a time. */
+    private val vpsSendMutex = Mutex()
 
     private var toneGenerator: ToneGenerator? = null
 
@@ -155,49 +160,53 @@ class AudioPipelineManager @Inject constructor(
     fun sendTextMessage(text: String) {
         val conversationId = _currentConversationId.value ?: return
         scope.launch {
-            // Temporarily pause the mic so the streaming loop doesn't interfere
+            // Immediately kill any pending ASR endpoint timers (e.g. AndroidAsrAdapter's
+            // 2.4s merge window) BEFORE acquiring the mutex, so a late timer can't sneak
+            // a stale voice message into processEndpoint() while we wait for the lock.
             val wasMuted = _isMuted.value
             _isMuted.value = true
+            asr.reset()
+            _partialResult.value = ""
 
-            try {
-                conversationRepository.addMessage(conversationId, MessageRole.USER, text)
+            vpsSendMutex.withLock {
+                try {
+                    conversationRepository.addMessage(conversationId, MessageRole.USER, text)
 
-                _pipelineState.value = PipelineState.SENDING
-                _streamingResponse.value = ""
+                    _pipelineState.value = PipelineState.SENDING
+                    _streamingResponse.value = ""
 
-                val response = withContext(Dispatchers.IO) {
-                    vpsRepository.sendMessageStreaming(text) { accumulated ->
-                        _streamingResponse.value = accumulated
+                    val response = withContext(Dispatchers.IO) {
+                        vpsRepository.sendMessageStreaming(text) { accumulated ->
+                            _streamingResponse.value = accumulated
+                        }
                     }
-                }
-                val responseText = response.getOrNull()
+                    val responseText = response.getOrNull()
 
-                if (responseText != null) {
-                    conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, responseText)
-                    _pipelineState.value = PipelineState.SPEAKING
+                    if (responseText != null) {
+                        conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, responseText)
+                        _pipelineState.value = PipelineState.SPEAKING
+                        _streamingResponse.value = ""
+                        tts.speak(responseText)
+                    } else {
+                        conversationRepository.addMessage(
+                            conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
+                        )
+                        _pipelineState.value = PipelineState.SPEAKING
+                        _streamingResponse.value = ""
+                        speakCue("I couldn't reach the server.")
+                    }
+                } finally {
+                    _isMuted.value = wasMuted
                     _streamingResponse.value = ""
-                    tts.speak(responseText)
-                } else {
-                    conversationRepository.addMessage(
-                        conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
-                    )
-                    _pipelineState.value = PipelineState.SPEAKING
-                    _streamingResponse.value = ""
-                    speakCue("I couldn't reach the server.")
+
+                    // Clean restart for next voice input
+                    asr.reset()
+                    _partialResult.value = ""
+                    delay(300)
+
+                    _pipelineState.value = PipelineState.LISTENING
+                    playTone(ToneGenerator.TONE_PROP_BEEP)
                 }
-            } finally {
-                // Restore mic and fully restart ASR for next voice input
-                _isMuted.value = wasMuted
-                _partialResult.value = ""
-                _streamingResponse.value = ""
-
-                // Force ASR to clean restart
-                asr.reset()
-                // Small delay to let ASR settle before streaming loop resumes
-                delay(300)
-
-                _pipelineState.value = PipelineState.LISTENING
-                playTone(ToneGenerator.TONE_PROP_BEEP)
             }
         }
     }
@@ -333,72 +342,92 @@ class AudioPipelineManager @Inject constructor(
         }
 
         Log.i(TAG, "Transcribed: $text")
-        val conversationId = _currentConversationId.value ?: return
 
-        playTone(ToneGenerator.TONE_PROP_ACK)
-        conversationRepository.addMessage(conversationId, MessageRole.USER, text)
+        // If the pipeline is already busy (e.g. a text message grabbed the lock),
+        // discard this late voice endpoint — the user switched to typed input.
+        if (!vpsSendMutex.tryLock()) {
+            Log.w(TAG, "Dropping voice endpoint — pipeline busy with another send")
+            asr.reset()
+            _partialResult.value = ""
+            return
+        }
 
-        _pipelineState.value = PipelineState.SENDING
-        _streamingResponse.value = ""
-
-        // Launch streaming VPS call + optional entertainment in parallel
-        val responseText = withContext(Dispatchers.IO) {
-            val responseDeferred = async {
-                vpsRepository.sendMessageStreaming(text) { accumulated ->
-                    _streamingResponse.value = accumulated
-                }
+        try {
+            // Re-check state after acquiring lock — sendTextMessage may have just finished
+            val state = _pipelineState.value
+            if (state == PipelineState.SENDING || state == PipelineState.SPEAKING) {
+                Log.w(TAG, "Dropping voice endpoint — pipeline state is $state")
+                return
             }
 
-            // Entertainment: speak fun facts if response takes > 3s
-            val entertainmentJob = if (funFactsEnabled) {
-                launch {
-                    delay(ENTERTAINMENT_DELAY_MS)
-                    while (isActive && !responseDeferred.isCompleted) {
-                        _pipelineState.value = PipelineState.ENTERTAINING
-                        val fact = entertainmentUseCase()
-                        tts.speak(fact)
-                        if (!responseDeferred.isCompleted) {
-                            delay(1500)
-                        }
+            val conversationId = _currentConversationId.value ?: return
+
+            playTone(ToneGenerator.TONE_PROP_ACK)
+            conversationRepository.addMessage(conversationId, MessageRole.USER, text)
+
+            _pipelineState.value = PipelineState.SENDING
+            _streamingResponse.value = ""
+
+            // Launch streaming VPS call + optional entertainment in parallel
+            val responseText = withContext(Dispatchers.IO) {
+                val responseDeferred = async {
+                    vpsRepository.sendMessageStreaming(text) { accumulated ->
+                        _streamingResponse.value = accumulated
                     }
                 }
-            } else null
 
-            val result = responseDeferred.await()
-            entertainmentJob?.cancel()
+                // Entertainment: speak fun facts if response takes > 3s
+                val entertainmentJob = if (funFactsEnabled) {
+                    launch {
+                        delay(ENTERTAINMENT_DELAY_MS)
+                        while (isActive && !responseDeferred.isCompleted) {
+                            _pipelineState.value = PipelineState.ENTERTAINING
+                            val fact = entertainmentUseCase()
+                            tts.speak(fact)
+                            if (!responseDeferred.isCompleted) {
+                                delay(1500)
+                            }
+                        }
+                    }
+                } else null
 
-            // If we were entertaining, let TTS finish and announce transition
-            if (tts.isSpeaking.value) {
-                var waitCount = 0
-                while (tts.isSpeaking.value && waitCount < 100) {
-                    delay(100)
-                    waitCount++
+                val result = responseDeferred.await()
+                entertainmentJob?.cancel()
+
+                // If we were entertaining, let TTS finish and announce transition
+                if (tts.isSpeaking.value) {
+                    var waitCount = 0
+                    while (tts.isSpeaking.value && waitCount < 100) {
+                        delay(100)
+                        waitCount++
+                    }
+                    tts.speak("Alright, I have the response now.")
                 }
-                tts.speak("Alright, I have the response now.")
+
+                result.getOrNull()
             }
 
-            result.getOrNull()
+            if (responseText != null) {
+                conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, responseText)
+                playTone(ToneGenerator.TONE_PROP_ACK)
+                _pipelineState.value = PipelineState.SPEAKING
+                _streamingResponse.value = ""
+                tts.speak(responseText)
+            } else {
+                conversationRepository.addMessage(
+                    conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
+                )
+                _pipelineState.value = PipelineState.SPEAKING
+                _streamingResponse.value = ""
+                speakCue("I couldn't reach the server. Please check your VPS connection in settings.")
+            }
+        } finally {
+            asr.reset()
+            _partialResult.value = ""
+            _pipelineState.value = PipelineState.LISTENING
+            playTone(ToneGenerator.TONE_PROP_BEEP)
+            vpsSendMutex.unlock()
         }
-
-        if (responseText != null) {
-            conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, responseText)
-            playTone(ToneGenerator.TONE_PROP_ACK)
-            _pipelineState.value = PipelineState.SPEAKING
-            _streamingResponse.value = ""
-            tts.speak(responseText)
-        } else {
-            conversationRepository.addMessage(
-                conversationId, MessageRole.SYSTEM, "Failed to reach VPS",
-            )
-            _pipelineState.value = PipelineState.SPEAKING
-            _streamingResponse.value = ""
-            speakCue("I couldn't reach the server. Please check your VPS connection in settings.")
-        }
-
-        asr.reset()
-        _partialResult.value = ""
-        _pipelineState.value = PipelineState.LISTENING
-        playTone(ToneGenerator.TONE_PROP_BEEP)
     }
 
     private suspend fun sendWithEntertainment(text: String): String? {
