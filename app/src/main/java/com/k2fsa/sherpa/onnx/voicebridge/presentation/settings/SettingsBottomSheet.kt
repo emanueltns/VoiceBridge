@@ -13,9 +13,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -24,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -107,10 +112,26 @@ fun SettingsBottomSheet(
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState()),
         ) {
-            Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineMedium,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Settings",
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = {
+                    viewModel.save()
+                    onDismiss()
+                }) {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = "Save",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
