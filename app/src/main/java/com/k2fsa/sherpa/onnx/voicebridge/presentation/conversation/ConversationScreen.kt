@@ -266,7 +266,7 @@ private fun IdleLayout(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = if (modelsReady) "Tap to Start" else "Loading models...",
+            text = if (modelsReady) "Tap to Start" else "Loading local LLM...",
             color = TextSecondary,
             fontSize = 20.sp,
             fontWeight = FontWeight.Medium,

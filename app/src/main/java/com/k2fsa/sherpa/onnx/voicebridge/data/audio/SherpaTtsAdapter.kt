@@ -82,18 +82,26 @@ class SherpaTtsAdapter @Inject constructor(
                     track.play()
                 }
 
-                t.generateWithConfigAndCallback(
-                    text = text,
-                    config = GenerationConfig(sid = currentSid, speed = 1.05f),
-                    callback = { samples ->
-                        if (!shouldStop) {
-                            track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-                            1
-                        } else {
-                            0
-                        }
-                    },
-                )
+                // Split into sentences and generate back-to-back
+                // so AudioTrack stays playing without gaps
+                val sentences = splitSentences(text)
+                for (sentence in sentences) {
+                    if (shouldStop) break
+                    if (sentence.isBlank()) continue
+
+                    t.generateWithConfigAndCallback(
+                        text = sentence,
+                        config = GenerationConfig(sid = currentSid, speed = 1.1f),
+                        callback = { samples ->
+                            if (!shouldStop) {
+                                track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                                1
+                            } else {
+                                0
+                            }
+                        },
+                    )
+                }
 
                 // Brief pause for audio to finish draining
                 Thread.sleep(150)
@@ -103,6 +111,31 @@ class SherpaTtsAdapter @Inject constructor(
                 _isSpeaking.value = false
             }
         }
+    }
+
+    /**
+     * Splits text into sentences, keeping punctuation attached.
+     * Groups very short fragments together to avoid tiny TTS calls.
+     */
+    private fun splitSentences(text: String): List<String> {
+        // Split on sentence boundaries
+        val raw = text.split(Regex("(?<=[.!?])\\s+"))
+        if (raw.size <= 1) return listOf(text)
+
+        // Group short fragments together (< 40 chars) to reduce gaps
+        val result = mutableListOf<String>()
+        val buffer = StringBuilder()
+        for (part in raw) {
+            buffer.append(part).append(" ")
+            if (buffer.length >= 40) {
+                result.add(buffer.toString().trim())
+                buffer.clear()
+            }
+        }
+        if (buffer.isNotBlank()) {
+            result.add(buffer.toString().trim())
+        }
+        return result
     }
 
     override fun stop() {

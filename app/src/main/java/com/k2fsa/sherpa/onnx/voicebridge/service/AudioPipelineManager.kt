@@ -201,7 +201,6 @@ class AudioPipelineManager @Inject constructor(
                 conversationRepository.addMessage(conversationId, MessageRole.USER, text)
 
                 _pipelineState.value = PipelineState.SENDING
-                speakCue("Let me think about that.")
                 val response = sendWithEntertainment(text)
 
                 if (response != null) {
@@ -217,10 +216,10 @@ class AudioPipelineManager @Inject constructor(
                     speakCue("I couldn't reach the server. Please check your VPS connection in settings. I'll keep trying.")
                 }
 
-                // Back to listening
-                _pipelineState.value = PipelineState.LISTENING
-                speakCue("I'm listening.")
+                // Back to listening — reset FIRST, then announce
                 asr.reset()
+                _pipelineState.value = PipelineState.LISTENING
+                playTone(ToneGenerator.TONE_PROP_BEEP)
             } else if (asr.partialResult.value.isNotBlank()) {
                 // We have partial text — show we're actively transcribing
                 if (_pipelineState.value == PipelineState.LISTENING) {
