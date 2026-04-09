@@ -199,8 +199,8 @@ class AndroidAsrAdapter @Inject constructor(
         }
 
         override fun onBeginningOfSpeech() {
-            // User started speaking — cancel any pending endpoint timer
-            cancelEndpointTimer()
+            // Don't cancel timer here — onBeginningOfSpeech fires from ambient noise too.
+            // Timer only gets cancelled when we receive actual new text (in onPartialResults).
             Log.d(TAG, "Speech started")
         }
 
@@ -250,7 +250,9 @@ class AndroidAsrAdapter @Inject constructor(
             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             val text = matches?.firstOrNull()?.trim() ?: ""
             if (text.isNotBlank()) {
-                // Show buffer + current partial
+                // User is genuinely speaking new words — cancel the endpoint timer
+                cancelEndpointTimer()
+
                 val display = if (textBuffer.isNotEmpty()) {
                     "${textBuffer} $text"
                 } else {
