@@ -165,6 +165,7 @@ fun SettingsScreen(
                     onValueChange = viewModel::onHostChanged,
                     label = "host",
                     modifier = Modifier.weight(3f),
+                    isPassword = true,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 TerminalTextField(
@@ -173,6 +174,7 @@ fun SettingsScreen(
                     label = "port",
                     modifier = Modifier.weight(1f),
                     keyboardType = KeyboardType.Number,
+                    isPassword = true,
                 )
             }
 
@@ -217,7 +219,17 @@ fun SettingsScreen(
             SectionHeader("# Display")
             Spacer(modifier = Modifier.height(8.dp))
             val context = androidx.compose.ui.platform.LocalContext.current
-            val overlayEnabled = android.provider.Settings.canDrawOverlays(context)
+            val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+            var overlayEnabled by remember { mutableStateOf(android.provider.Settings.canDrawOverlays(context)) }
+            androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                        overlayEnabled = android.provider.Settings.canDrawOverlays(context)
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -316,6 +328,7 @@ private fun TerminalTextField(
     label: String,
     modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
+    isPassword: Boolean = false,
 ) {
     Column(modifier = modifier) {
         Text(text = "$label=", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TerminalDim)
@@ -326,6 +339,7 @@ private fun TerminalTextField(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(4.dp),
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            visualTransformation = if (isPassword) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = TerminalInputBg, unfocusedContainerColor = TerminalInputBg,
                 focusedBorderColor = CallGreen.copy(alpha = 0.3f), unfocusedBorderColor = TerminalDim.copy(alpha = 0.3f),
