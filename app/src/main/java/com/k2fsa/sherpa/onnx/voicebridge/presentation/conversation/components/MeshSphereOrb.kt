@@ -161,16 +161,16 @@ fun MeshSphereOrb(
         label = "speed",
     )
 
-    // State-dependent color (green variations)
+    // State-dependent color — each state gets a distinct hue
     val meshHue by animateFloatAsState(
         targetValue = when (pipelineState) {
-            PipelineState.IDLE -> 140f
-            PipelineState.INITIALIZING -> 135f
-            PipelineState.LISTENING -> 130f
-            PipelineState.TRANSCRIBING -> 160f
-            PipelineState.SENDING -> 100f
-            PipelineState.SPEAKING -> 145f
-            PipelineState.ENTERTAINING -> 120f
+            PipelineState.IDLE -> 140f         // muted green
+            PipelineState.INITIALIZING -> 130f // green (loading)
+            PipelineState.LISTENING -> 130f    // matrix green
+            PipelineState.TRANSCRIBING -> 185f // cyan (hearing)
+            PipelineState.SENDING -> 35f       // amber (thinking)
+            PipelineState.SPEAKING -> 260f     // purple (talking)
+            PipelineState.ENTERTAINING -> 300f // magenta (fun fact)
         },
         animationSpec = tween(600),
         label = "hue",
@@ -178,13 +178,15 @@ fun MeshSphereOrb(
 
     val meshSaturation = when (pipelineState) {
         PipelineState.IDLE -> 0.30f
-        PipelineState.INITIALIZING -> 0.60f
+        PipelineState.INITIALIZING -> 0.75f
+        PipelineState.SENDING -> 0.85f
+        PipelineState.ENTERTAINING -> 0.80f
         else -> 0.75f
     }
 
     val overallBrightness = when (pipelineState) {
         PipelineState.IDLE -> 0.45f
-        PipelineState.INITIALIZING -> 0.65f
+        PipelineState.INITIALIZING -> 0.85f
         PipelineState.LISTENING, PipelineState.TRANSCRIBING -> 0.90f
         PipelineState.SENDING -> 0.75f
         PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 1.0f
@@ -192,6 +194,7 @@ fun MeshSphereOrb(
 
     val glowIntensity = when (pipelineState) {
         PipelineState.IDLE -> 0.08f
+        PipelineState.INITIALIZING -> 0.22f
         PipelineState.LISTENING, PipelineState.TRANSCRIBING -> 0.20f
         PipelineState.SPEAKING, PipelineState.ENTERTAINING -> 0.30f
         else -> 0.12f
