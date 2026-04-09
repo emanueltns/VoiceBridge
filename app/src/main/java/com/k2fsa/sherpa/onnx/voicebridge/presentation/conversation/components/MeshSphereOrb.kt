@@ -327,7 +327,7 @@ fun MeshSphereOrb(
                 val hueShift = (avgRim * 15f - 5f)
                 val lineColor = Color.hsl(
                     hue = (meshHue + hueShift).coerceIn(0f, 360f),
-                    saturation = meshSaturation + avgRim * 0.2f,
+                    saturation = (meshSaturation + avgRim * 0.2f).coerceIn(0f, 1f),
                     lightness = (0.4f + avgRim * 0.35f + depthFade * 0.15f).coerceIn(0.1f, 0.9f),
                 )
 
