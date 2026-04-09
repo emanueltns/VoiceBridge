@@ -14,6 +14,7 @@ data class ConversationUiState(
     val audioAmplitude: Float = 0f,
     val callStartTimeMs: Long? = null,
     val isMuted: Boolean = false,
+    val modelsReady: Boolean = false,
 )
 
 sealed class ConversationIntent {

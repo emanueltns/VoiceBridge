@@ -100,14 +100,18 @@ fun ActiveCallControls(
 fun IdleCallButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     FilledIconButton(
         onClick = onClick,
         modifier = modifier.size(80.dp),
         shape = CircleShape,
+        enabled = enabled,
         colors = IconButtonDefaults.filledIconButtonColors(
             containerColor = CallGreen,
             contentColor = VBBackground,
+            disabledContainerColor = CallGreen.copy(alpha = 0.3f),
+            disabledContentColor = VBBackground.copy(alpha = 0.5f),
         ),
     ) {
         Icon(Icons.Default.Call, contentDescription = "Start call", modifier = Modifier.size(32.dp))

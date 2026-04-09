@@ -98,6 +98,7 @@ fun ConversationScreen(
             )
         } else {
             IdleLayout(
+                modelsReady = state.modelsReady,
                 onStartCall = {
                     val permissions = buildList {
                         add(Manifest.permission.RECORD_AUDIO)
@@ -216,6 +217,7 @@ private fun ActiveCallLayout(
 
 @Composable
 private fun IdleLayout(
+    modelsReady: Boolean,
     onStartCall: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -264,7 +266,7 @@ private fun IdleLayout(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "Tap to Start",
+            text = if (modelsReady) "Tap to Start" else "Loading models...",
             color = TextSecondary,
             fontSize = 20.sp,
             fontWeight = FontWeight.Medium,
@@ -273,8 +275,11 @@ private fun IdleLayout(
 
         Spacer(modifier = Modifier.weight(0.12f))
 
-        // Green call button
-        IdleCallButton(onClick = onStartCall)
+        // Green call button (disabled while loading)
+        IdleCallButton(
+            onClick = onStartCall,
+            enabled = modelsReady,
+        )
 
         Spacer(modifier = Modifier.weight(0.12f))
     }

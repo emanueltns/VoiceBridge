@@ -26,10 +26,12 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import javax.inject.Singleton
 
 private const val TAG = "AudioPipeline"
 private const val ENTERTAINMENT_DELAY_MS = 3000L
 
+@Singleton
 class AudioPipelineManager @Inject constructor(
     private val asr: SpeechRecognitionService,
     private val tts: TextToSpeechService,
@@ -56,6 +58,12 @@ class AudioPipelineManager @Inject constructor(
 
     private var toneGenerator: ToneGenerator? = null
 
+    private val _isReady = MutableStateFlow(false)
+    val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
+
+    @Volatile
+    private var isInitializing = false
+
     // Mute support
     private val _isMuted = MutableStateFlow(false)
     val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
@@ -72,6 +80,9 @@ class AudioPipelineManager @Inject constructor(
     }
 
     fun initialize() {
+        if (_isReady.value || isInitializing) return
+        isInitializing = true
+
         _pipelineState.value = PipelineState.INITIALIZING
         Log.i(TAG, "Initializing models...")
         asr.initialize()
@@ -80,7 +91,11 @@ class AudioPipelineManager @Inject constructor(
         toneGenerator = try {
             ToneGenerator(AudioManager.STREAM_MUSIC, 60)
         } catch (_: Exception) { null }
-        Log.i(TAG, "All models initialized")
+
+        _isReady.value = true
+        _pipelineState.value = PipelineState.IDLE
+        isInitializing = false
+        Log.i(TAG, "All models initialized and ready")
     }
 
     fun setVoiceId(sid: Int) {

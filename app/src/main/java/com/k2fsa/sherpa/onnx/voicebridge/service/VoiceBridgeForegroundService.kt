@@ -50,8 +50,6 @@ class VoiceBridgeForegroundService : Service() {
         pipelineManager.setVoiceId(sid)
     }
 
-    private var isInitialized = false
-
     inner class LocalBinder : Binder() {
         val service: VoiceBridgeForegroundService
             get() = this@VoiceBridgeForegroundService
@@ -89,10 +87,8 @@ class VoiceBridgeForegroundService : Service() {
         }
 
         serviceScope.launch(Dispatchers.IO) {
-            if (!isInitialized) {
-                pipelineManager.initialize()
-                isInitialized = true
-            }
+            // initialize() is idempotent -- skips if already ready
+            pipelineManager.initialize()
             pipelineManager.start(conversationId)
         }
 
@@ -114,8 +110,8 @@ class VoiceBridgeForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        pipelineManager.release()
-        isInitialized = false
+        // Don't release pipeline -- it's a singleton, stays warm for next call
+        pipelineManager.stop()
         serviceScope.cancel()
         super.onDestroy()
     }

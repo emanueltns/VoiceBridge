@@ -33,6 +33,8 @@ class SherpaTtsAdapter @Inject constructor(
     @Volatile
     private var currentSid = 0
 
+    private val speakLock = Any()
+
     override fun initialize() {
         val modelDir = "kokoro-multi-lang-v1_0"
         val dataDir = assetCopier.copyDataDir("$modelDir/espeak-ng-data")
@@ -44,13 +46,13 @@ class SherpaTtsAdapter @Inject constructor(
                     voices = "$modelDir/voices.bin",
                     tokens = "$modelDir/tokens.txt",
                     dataDir = "$dataDir/$modelDir/espeak-ng-data",
-                    lexicon = "$modelDir/lexicon-us-en.txt,$modelDir/lexicon-zh.txt",
+                    lang = "en",
                 ),
                 numThreads = 4,
                 debug = false,
                 provider = "cpu",
             ),
-            maxNumSentences = 4,
+            maxNumSentences = 1,
             silenceScale = 0.05f,
         )
 
@@ -70,29 +72,37 @@ class SherpaTtsAdapter @Inject constructor(
         val t = tts ?: return
         val track = audioTrack ?: return
 
-        shouldStop = false
-        _isSpeaking.value = true
+        // Prevent concurrent native TTS calls which cause SIGSEGV
+        synchronized(speakLock) {
+            shouldStop = false
+            _isSpeaking.value = true
 
-        if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
-            track.play()
-        }
-
-        t.generateWithConfigAndCallback(
-            text = text,
-            config = GenerationConfig(sid = currentSid, speed = 1.05f),
-            callback = { samples ->
-                if (!shouldStop) {
-                    track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-                    1
-                } else {
-                    0
+            try {
+                if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                    track.play()
                 }
-            },
-        )
 
-        // Brief pause for audio to finish draining
-        Thread.sleep(150)
-        _isSpeaking.value = false
+                t.generateWithConfigAndCallback(
+                    text = text,
+                    config = GenerationConfig(sid = currentSid, speed = 1.05f),
+                    callback = { samples ->
+                        if (!shouldStop) {
+                            track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                            1
+                        } else {
+                            0
+                        }
+                    },
+                )
+
+                // Brief pause for audio to finish draining
+                Thread.sleep(150)
+            } catch (e: Exception) {
+                android.util.Log.e("SherpaTts", "TTS speak error: ${e.message}", e)
+            } finally {
+                _isSpeaking.value = false
+            }
+        }
     }
 
     override fun stop() {

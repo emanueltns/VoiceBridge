@@ -13,6 +13,7 @@ import com.k2fsa.sherpa.onnx.voicebridge.domain.model.PipelineState
 import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.ConversationRepository
 import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.SettingsRepository
 import com.k2fsa.sherpa.onnx.voicebridge.domain.repository.VpsRepository
+import com.k2fsa.sherpa.onnx.voicebridge.service.AudioPipelineManager
 import com.k2fsa.sherpa.onnx.voicebridge.service.ServiceCommand
 import com.k2fsa.sherpa.onnx.voicebridge.service.VoiceBridgeForegroundService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +30,7 @@ class ConversationViewModel @Inject constructor(
     private val conversationRepository: ConversationRepository,
     private val settingsRepository: SettingsRepository,
     private val vpsRepository: VpsRepository,
+    private val pipelineManager: AudioPipelineManager,
 ) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(ConversationUiState())
@@ -53,6 +55,15 @@ class ConversationViewModel @Inject constructor(
 
     init {
         observeConnectionState()
+        observeModelsReady()
+    }
+
+    private fun observeModelsReady() {
+        viewModelScope.launch {
+            pipelineManager.isReady.collect { ready ->
+                _state.update { it.copy(modelsReady = ready) }
+            }
+        }
     }
 
     fun handleIntent(intent: ConversationIntent) {
