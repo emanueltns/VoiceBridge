@@ -90,9 +90,10 @@ class ConversationViewModel @Inject constructor(
             try {
                 vpsRepository.connect(settings.host, settings.port)
 
-                // Apply ASR + voice settings BEFORE starting the pipeline
+                // Apply settings BEFORE starting the pipeline
                 pipelineManager.setAsrEngine(settings.useAndroidAsr)
                 pipelineManager.setVoiceId(settings.voiceId)
+                pipelineManager.funFactsEnabled = settings.funFactsEnabled
 
                 val conversation = conversationRepository.getLastActiveConversationId()?.let {
                     conversationRepository.getConversation(it)

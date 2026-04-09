@@ -25,6 +25,7 @@ class SettingsDataStore @Inject constructor(
     private val portKey = intPreferencesKey("vps_port")
     private val voiceIdKey = intPreferencesKey("voice_id")
     private val useAndroidAsrKey = booleanPreferencesKey("use_android_asr")
+    private val funFactsKey = booleanPreferencesKey("fun_facts_enabled")
 
     val settings: Flow<ConnectionSettings> = context.dataStore.data.map { prefs ->
         ConnectionSettings(
@@ -32,6 +33,7 @@ class SettingsDataStore @Inject constructor(
             port = prefs[portKey] ?: 9999,
             voiceId = prefs[voiceIdKey] ?: 0,
             useAndroidAsr = prefs[useAndroidAsrKey] ?: false,
+            funFactsEnabled = prefs[funFactsKey] ?: true,
         )
     }
 
@@ -45,6 +47,7 @@ class SettingsDataStore @Inject constructor(
             prefs[portKey] = settings.port
             prefs[voiceIdKey] = settings.voiceId
             prefs[useAndroidAsrKey] = settings.useAndroidAsr
+            prefs[funFactsKey] = settings.funFactsEnabled
         }
     }
 }

@@ -5,4 +5,5 @@ data class ConnectionSettings(
     val port: Int = 9999,
     val voiceId: Int = 0,
     val useAndroidAsr: Boolean = false,
+    val funFactsEnabled: Boolean = true,
 )

@@ -17,6 +17,7 @@ data class SettingsUiState(
     val port: String = "9999",
     val voiceId: Int = 0,
     val useAndroidAsr: Boolean = false,
+    val funFactsEnabled: Boolean = true,
     val saved: Boolean = false,
 )
 
@@ -37,6 +38,7 @@ class SettingsViewModel @Inject constructor(
                         port = settings.port.toString(),
                         voiceId = settings.voiceId,
                         useAndroidAsr = settings.useAndroidAsr,
+                        funFactsEnabled = settings.funFactsEnabled,
                     )
                 }
             }
@@ -55,6 +57,10 @@ class SettingsViewModel @Inject constructor(
         _state.update { it.copy(voiceId = voiceId, saved = false) }
     }
 
+    fun onFunFactsChanged(enabled: Boolean) {
+        _state.update { it.copy(funFactsEnabled = enabled, saved = false) }
+    }
+
     fun onAsrEngineChanged(useAndroid: Boolean) {
         _state.update { it.copy(useAndroidAsr = useAndroid, saved = false) }
     }
@@ -63,7 +69,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val port = _state.value.port.toIntOrNull() ?: 9999
             settingsRepository.saveSettings(
-                ConnectionSettings(_state.value.host, port, _state.value.voiceId, _state.value.useAndroidAsr),
+                ConnectionSettings(_state.value.host, port, _state.value.voiceId, _state.value.useAndroidAsr, _state.value.funFactsEnabled),
             )
             _state.update { it.copy(saved = true) }
         }

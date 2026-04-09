@@ -46,6 +46,9 @@ class AudioPipelineManager @Inject constructor(
     private var asr: SpeechRecognitionService = sherpaAsr
     private var useAndroidAsr = false
 
+    @Volatile
+    var funFactsEnabled = true
+
     fun setAsrEngine(useAndroid: Boolean) {
         if (useAndroid == useAndroidAsr) return
         val wasRunning = _pipelineState.value != PipelineState.IDLE
@@ -331,14 +334,44 @@ class AudioPipelineManager @Inject constructor(
         _pipelineState.value = PipelineState.SENDING
         _streamingResponse.value = ""
 
-        // Stream the response — show text live as it arrives from VPS
-        val response = withContext(Dispatchers.IO) {
-            vpsRepository.sendMessageStreaming(text) { accumulated ->
-                _streamingResponse.value = accumulated
+        // Launch streaming VPS call + optional entertainment in parallel
+        val responseText = withContext(Dispatchers.IO) {
+            val responseDeferred = async {
+                vpsRepository.sendMessageStreaming(text) { accumulated ->
+                    _streamingResponse.value = accumulated
+                }
             }
-        }
 
-        val responseText = response.getOrNull()
+            // Entertainment: speak fun facts if response takes > 3s
+            val entertainmentJob = if (funFactsEnabled) {
+                launch {
+                    delay(ENTERTAINMENT_DELAY_MS)
+                    while (isActive && !responseDeferred.isCompleted) {
+                        _pipelineState.value = PipelineState.ENTERTAINING
+                        val fact = entertainmentUseCase()
+                        tts.speak(fact)
+                        if (!responseDeferred.isCompleted) {
+                            delay(1500)
+                        }
+                    }
+                }
+            } else null
+
+            val result = responseDeferred.await()
+            entertainmentJob?.cancel()
+
+            // If we were entertaining, let TTS finish and announce transition
+            if (tts.isSpeaking.value) {
+                var waitCount = 0
+                while (tts.isSpeaking.value && waitCount < 100) {
+                    delay(100)
+                    waitCount++
+                }
+                tts.speak("Alright, I have the response now.")
+            }
+
+            result.getOrNull()
+        }
 
         if (responseText != null) {
             conversationRepository.addMessage(conversationId, MessageRole.ASSISTANT, responseText)

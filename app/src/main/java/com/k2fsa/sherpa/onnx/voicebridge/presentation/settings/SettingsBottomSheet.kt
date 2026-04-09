@@ -208,6 +208,32 @@ fun SettingsBottomSheet(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // ── Fun Facts ──
+            Text("While Waiting", style = MaterialTheme.typography.titleLarge)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Fun facts while Claude thinks",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = "Speaks entertaining facts if response takes > 3s",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = state.funFactsEnabled,
+                    onCheckedChange = { viewModel.onFunFactsChanged(it) },
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // ── Voice ──
             Text("Voice", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(12.dp))
