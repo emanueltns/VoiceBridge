@@ -1,7 +1,10 @@
 package com.k2fsa.sherpa.onnx.voicebridge.presentation.conversation
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
@@ -113,15 +116,25 @@ fun ConversationScreen(
     }
 
     // Auto-connect when models are ready and VPS is configured
+    val context = LocalContext.current
     LaunchedEffect(state.modelsReady, state.needsSetup) {
         if (state.modelsReady && !state.needsSetup && !state.isRunning) {
-            val permissions = buildList {
-                add(Manifest.permission.RECORD_AUDIO)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    add(Manifest.permission.POST_NOTIFICATIONS)
+            val audioGranted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (audioGranted) {
+                // Permissions already granted — start immediately without launcher
+                viewModel.handleIntent(ConversationIntent.Start)
+            } else {
+                val permissions = buildList {
+                    add(Manifest.permission.RECORD_AUDIO)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
                 }
+                permissionLauncher.launch(permissions.toTypedArray())
             }
-            permissionLauncher.launch(permissions.toTypedArray())
         }
     }
 
