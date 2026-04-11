@@ -380,8 +380,14 @@ class AudioPipelineManager @Inject constructor(
                 val entertainmentJob = if (funFactsEnabled) {
                     launch {
                         delay(ENTERTAINMENT_DELAY_MS)
-                        while (isActive && !responseDeferred.isCompleted) {
+                        if (isActive && !responseDeferred.isCompleted) {
                             _pipelineState.value = PipelineState.ENTERTAINING
+                            tts.speak("I'm waiting for the response. While we wait, here's something fun.")
+                            if (!responseDeferred.isCompleted) {
+                                delay(1500)
+                            }
+                        }
+                        while (isActive && !responseDeferred.isCompleted) {
                             val fact = entertainmentUseCase()
                             tts.speak(fact)
                             if (!responseDeferred.isCompleted) {
