@@ -154,7 +154,11 @@ class ConversationViewModel @Inject constructor(
         if (svc != null) {
             svc.sendTextMessage(text)
         } else {
+            // Service not bound yet — queue the message and ensure session starts
             pendingTextMessages.add(text)
+            if (!_state.value.isRunning) {
+                startSession()
+            }
         }
     }
 

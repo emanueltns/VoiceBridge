@@ -361,9 +361,6 @@ fun ConversationScreen(
             if (inputText.isNotBlank()) {
                 FilledIconButton(
                     onClick = {
-                        if (!state.isRunning) {
-                            viewModel.handleIntent(ConversationIntent.Start)
-                        }
                         viewModel.handleIntent(ConversationIntent.SendText(inputText.trim()))
                         inputText = ""
                     },
