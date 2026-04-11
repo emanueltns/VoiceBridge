@@ -11,7 +11,7 @@ private const val TAG = "VpsClient"
 
 class VpsClient @Inject constructor() {
 
-    fun sendAndReceive(host: String, port: Int, text: String, timeoutMs: Int = 180_000): Result<String> {
+    fun sendAndReceive(host: String, port: Int, text: String, timeoutMs: Int = 300_000): Result<String> {
         return try {
             val socket = Socket(host, port)
             socket.soTimeout = timeoutMs
@@ -46,7 +46,7 @@ class VpsClient @Inject constructor() {
         host: String,
         port: Int,
         text: String,
-        timeoutMs: Int = 180_000,
+        timeoutMs: Int = 300_000,
         onChunk: (accumulated: String) -> Unit,
     ): Result<String> {
         return try {
