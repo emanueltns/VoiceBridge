@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, dev]
   workflow_dispatch:
 
 jobs:
@@ -20,13 +20,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
-
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Release build for main branch
+      - name: Decode keystore
+        if: github.ref == 'refs/heads/main'
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
+
       - name: Build release APK
+        if: github.ref == 'refs/heads/main'
         env:
           KEYSTORE_PATH: release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -34,11 +37,18 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
+      # Debug build for dev branch
+      - name: Build debug APK
+        if: github.ref == 'refs/heads/dev'
+        run: ./gradlew assembleDebug
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: voicebridge-release
-          path: app/build/outputs/apk/release/*.apk
+          name: ${{ github.ref == 'refs/heads/main' && 'voicebridge-release' || 'voicebridge-debug' }}
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
       - name: Notify Telegram
@@ -51,16 +61,21 @@ jobs:
           BRANCH: ${{ github.ref_name }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # Sanitize commit message for Telegram HTML
           SAFE_MSG=$(echo "$COMMIT_MSG" | head -1 | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
+          if [ "$BRANCH" = "main" ]; then
+            BUILD_TYPE="RELEASE"
+          else
+            BUILD_TYPE="DEBUG"
+          fi
+
           if [ "$JOB_STATUS" = "success" ]; then
-            TEXT="✅ <b>VoiceBridge Build SUCCESS</b>
+            TEXT="✅ <b>VoiceBridge ${BUILD_TYPE} Build SUCCESS</b>
           Commit: <code>${SAFE_MSG}</code>
           Branch: ${BRANCH}
           <a href=\"${RUN_URL}\">Download APK</a>"
           else
-            TEXT="❌ <b>VoiceBridge Build FAILED</b>
+            TEXT="❌ <b>VoiceBridge ${BUILD_TYPE} Build FAILED</b>
           Commit: <code>${SAFE_MSG}</code>
           Branch: ${BRANCH}
           <a href=\"${RUN_URL}\">View logs</a>"
