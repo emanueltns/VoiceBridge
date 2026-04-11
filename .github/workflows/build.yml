@@ -32,3 +32,38 @@ jobs:
           name: voicebridge-debug
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 30
+
+      - name: Notify Telegram
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            EMOJI="✅"
+            STATUS="SUCCESS"
+            LINK="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            MSG="${EMOJI} <b>VoiceBridge Build ${STATUS}</b>
+
+          Commit: <code>${{ github.event.head_commit.message }}</code>
+          Branch: ${{ github.ref_name }}
+          Duration: ${{ github.run_id }}
+
+          <a href=\"${LINK}\">Download APK</a>"
+          else
+            EMOJI="❌"
+            STATUS="FAILED"
+            LINK="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            MSG="${EMOJI} <b>VoiceBridge Build ${STATUS}</b>
+
+          Commit: <code>${{ github.event.head_commit.message }}</code>
+          Branch: ${{ github.ref_name }}
+
+          <a href=\"${LINK}\">View logs</a>"
+          fi
+
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="${MSG}" \
+            -d parse_mode="HTML" \
+            -d disable_web_page_preview="true"
