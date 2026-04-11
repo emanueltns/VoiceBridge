@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -190,11 +191,37 @@ fun SettingsScreen(
                         fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = TextPrimary,
                     )
                     Text(
-                        text = if (state.useAndroidAsr) "# Best accuracy, great with accents" else "# Private, offline, cross-platform",
+                        text = if (state.useAndroidAsr) "# Online, best accuracy" else "# Private, offline, on-device",
                         fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = TerminalDim,
                     )
+                    if (!state.offlineModelAvailable && !state.useAndroidAsr.not()) {
+                        Text(
+                            text = "# Offline model not downloaded (632MB)",
+                            fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = DotYellow,
+                        )
+                    }
                 }
                 Switch(checked = state.useAndroidAsr, onCheckedChange = { viewModel.onAsrEngineChanged(it) })
+            }
+
+            // Download dialog for offline model
+            if (state.showDownloadDialog) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.dismissDownloadDialog() },
+                    title = { Text("Download Offline Model?", color = TextPrimary) },
+                    text = {
+                        Text(
+                            "The offline speech recognition model (Nemotron) needs to be downloaded first.\n\nSize: ~632MB\n\nThis feature is coming soon.",
+                            color = TextPrimary,
+                        )
+                    },
+                    confirmButton = {
+                        OutlinedButton(onClick = { viewModel.dismissDownloadDialog() }) {
+                            Text("OK", color = CallGreen)
+                        }
+                    },
+                    containerColor = TerminalHeaderBg,
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
