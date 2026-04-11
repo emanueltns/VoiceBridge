@@ -365,6 +365,13 @@ class AudioPipelineManager @Inject constructor(
             playTone(ToneGenerator.TONE_PROP_ACK)
             conversationRepository.addMessage(conversationId, MessageRole.USER, text)
 
+            // Quick win 1: Immediate acknowledgment so user knows they were heard
+            val ackPhrases = listOf(
+                "Got it.", "Understood.", "On it.", "Let me check.",
+                "Sure thing.", "One moment.", "Looking into it.",
+            )
+            tts.speak(ackPhrases.random())
+
             _pipelineState.value = PipelineState.SENDING
             _streamingResponse.value = ""
 
@@ -380,18 +387,41 @@ class AudioPipelineManager @Inject constructor(
                 val entertainmentJob = if (funFactsEnabled) {
                     launch {
                         delay(ENTERTAINMENT_DELAY_MS)
+                        // Quick win 2: Randomized intro phrases
                         if (isActive && !responseDeferred.isCompleted) {
                             _pipelineState.value = PipelineState.ENTERTAINING
-                            tts.speak("I'm waiting for the response. While we wait, here's something fun.")
+                            val introPhrases = listOf(
+                                "I'm waiting for the response. While we wait, here's something fun.",
+                                "This one needs a moment. In the meantime, did you know...",
+                                "Still working on it. Here's something interesting while you wait.",
+                                "The server is thinking. Let me share a fun fact.",
+                                "Good question! While I get the answer, check this out.",
+                            )
+                            tts.speak(introPhrases.random())
                             if (!responseDeferred.isCompleted) {
                                 delay(1500)
                             }
                         }
+                        // Quick win 3: Progress updates + fun facts loop
+                        var factCount = 0
                         while (isActive && !responseDeferred.isCompleted) {
                             val fact = entertainmentUseCase()
                             tts.speak(fact)
+                            factCount++
                             if (!responseDeferred.isCompleted) {
                                 delay(1500)
+                            }
+                            // Progress update after a few facts (~10s)
+                            if (factCount == 2 && isActive && !responseDeferred.isCompleted) {
+                                val progressPhrases = listOf(
+                                    "Still working on it, this one needs a bit more thought.",
+                                    "Almost there, complex questions take a moment.",
+                                    "The server is still processing, hang tight.",
+                                )
+                                tts.speak(progressPhrases.random())
+                                if (!responseDeferred.isCompleted) {
+                                    delay(1500)
+                                }
                             }
                         }
                     }
@@ -407,7 +437,12 @@ class AudioPipelineManager @Inject constructor(
                         delay(100)
                         waitCount++
                     }
-                    tts.speak("Alright, I have the response now.")
+                    val transitionPhrases = listOf(
+                        "Alright, I have the response now.",
+                        "Okay, here's what I found.",
+                        "Got it, here we go.",
+                    )
+                    tts.speak(transitionPhrases.random())
                 }
 
                 result.getOrNull()
