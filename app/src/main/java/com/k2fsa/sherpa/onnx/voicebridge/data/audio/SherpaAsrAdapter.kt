@@ -31,6 +31,23 @@ class SherpaAsrAdapter @Inject constructor(
 
     override fun initialize() {
         val modelDir = "sherpa-onnx-nemotron-en"
+
+        // Check if model files exist in assets before initializing
+        try {
+            assetManager.list(modelDir)?.let { files ->
+                if (!files.contains("encoder.int8.onnx")) {
+                    Log.w(TAG, "Nemotron model not found in assets — offline ASR unavailable")
+                    return
+                }
+            } ?: run {
+                Log.w(TAG, "Nemotron model directory not found — offline ASR unavailable")
+                return
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Cannot check for Nemotron model: ${e.message}")
+            return
+        }
+
         val config = OnlineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = sampleRate, featureDim = 80),
             modelConfig = OnlineModelConfig(

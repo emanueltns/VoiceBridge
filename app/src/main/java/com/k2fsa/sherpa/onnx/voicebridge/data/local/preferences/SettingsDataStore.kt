@@ -33,7 +33,7 @@ class SettingsDataStore @Inject constructor(
             host = prefs[hostKey] ?: "",
             port = prefs[portKey] ?: 9999,
             voiceId = prefs[voiceIdKey] ?: 0,
-            useAndroidAsr = prefs[useAndroidAsrKey] ?: false,
+            useAndroidAsr = prefs[useAndroidAsrKey] ?: true,
             funFactsEnabled = prefs[funFactsKey] ?: true,
             userName = prefs[userNameKey] ?: "",
         )

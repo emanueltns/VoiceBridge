@@ -44,9 +44,9 @@ class AudioPipelineManager @Inject constructor(
     private val vpsRepository: VpsRepository,
     private val entertainmentUseCase: GetIdleEntertainmentUseCase,
 ) {
-    // Active ASR engine (switchable at runtime)
-    private var asr: SpeechRecognitionService = sherpaAsr
-    private var useAndroidAsr = false
+    // Active ASR engine (switchable at runtime, defaults to Android)
+    private var asr: SpeechRecognitionService = androidAsr
+    private var useAndroidAsr = true
 
     @Volatile
     var funFactsEnabled = true

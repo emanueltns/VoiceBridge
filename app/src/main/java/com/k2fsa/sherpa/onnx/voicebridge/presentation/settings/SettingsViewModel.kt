@@ -17,7 +17,7 @@ data class SettingsUiState(
     val host: String = "",
     val port: String = "9999",
     val voiceId: Int = 0,
-    val useAndroidAsr: Boolean = false,
+    val useAndroidAsr: Boolean = true,
     val funFactsEnabled: Boolean = true,
     val userName: String = "",
     val saved: Boolean = false,
