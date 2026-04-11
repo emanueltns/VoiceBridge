@@ -68,9 +68,11 @@ class ConversationViewModel @Inject constructor(
     private fun loadUserName() {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            _state.update { it.copy(userName = settings.userName) }
-            if (settings.host.isBlank()) {
-                _state.update { it.copy(needsSetup = true) }
+            _state.update {
+                it.copy(
+                    userName = settings.userName,
+                    needsSetup = settings.host.isBlank(),
+                )
             }
         }
     }
