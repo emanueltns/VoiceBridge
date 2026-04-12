@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace 'com.k2fsa.sherpa.onnx.voicebridge'
+    namespace 'freeapp.voicebridge.ai'
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.k2fsa.sherpa.onnx.voicebridge"
+        applicationId "freeapp.voicebridge.ai"
         minSdk 21
         targetSdk 35
         versionCode 2
